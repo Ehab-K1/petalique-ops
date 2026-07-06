@@ -31,6 +31,32 @@ export async function POST(request) {
   return NextResponse.json({ ok: true });
 }
 
+export async function PATCH(request) {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const b = await request.json();
+  if (!b.id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
+  const sql = await db();
+
+  if (b.role !== undefined) {
+    if (Number(b.id) === Number(admin.id)) {
+      return NextResponse.json({ error: "You can't change your own role." }, { status: 400 });
+    }
+    await sql`UPDATE users SET role = ${b.role === "admin" ? "admin" : "staff"} WHERE id = ${b.id}`;
+  }
+  if (b.password) {
+    if (String(b.password).length < 8) {
+      return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+    }
+    const hash = await bcrypt.hash(String(b.password), 10);
+    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${b.id}`;
+  }
+  if (b.name) {
+    await sql`UPDATE users SET name = ${String(b.name).trim()} WHERE id = ${b.id}`;
+  }
+  return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(request) {
   const admin = await requireAdmin();
   if (!admin) return NextResponse.json({ error: "Admin access required." }, { status: 403 });
@@ -40,6 +66,7 @@ export async function DELETE(request) {
     return NextResponse.json({ error: "You can't delete your own account." }, { status: 400 });
   }
   const sql = await db();
+  await sql`UPDATE orders SET assigned_user_id = NULL WHERE assigned_user_id = ${b.id}`;
   await sql`DELETE FROM users WHERE id = ${b.id}`;
   return NextResponse.json({ ok: true });
 }

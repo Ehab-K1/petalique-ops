@@ -2,6 +2,7 @@ import Nav from "@/components/Nav";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { money } from "@/components/ui";
+import { CountUp, Tilt } from "@/components/client";
 
 export const dynamic = "force-dynamic";
 
@@ -46,15 +47,15 @@ export default async function PlannerPage() {
           The longer you log intake and usage, the sharper this gets.
         </div>
 
-        <div className="grid grid-2" style={{ marginBottom: 16 }}>
-          <div className="card stat">
-            <div className="stat-value">{waste[0].waste_stems}</div>
+        <div className="grid grid-2 stagger" style={{ marginBottom: 16 }}>
+          <Tilt className="card stat">
+            <div className="stat-value"><CountUp value={waste[0].waste_stems} /></div>
             <div className="stat-label">Stems wasted in the last 28 days</div>
-          </div>
-          <div className="card stat">
-            <div className="stat-value">{money(waste[0].waste_value)}</div>
+          </Tilt>
+          <Tilt className="card stat">
+            <div className="stat-value"><CountUp value={waste[0].waste_value} money /></div>
             <div className="stat-label">Estimated waste cost (where stem cost was logged)</div>
-          </div>
+          </Tilt>
         </div>
 
         <div className="card">

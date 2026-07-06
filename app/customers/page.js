@@ -18,7 +18,7 @@ export default async function CustomersPage() {
     LEFT JOIN (
       SELECT customer_id,
         COUNT(*) AS order_count,
-        SUM(CASE WHEN status = 'delivered' THEN total ELSE 0 END) AS lifetime,
+        SUM(CASE WHEN status IN ('delivered','picked_up') THEN total ELSE 0 END) AS lifetime,
         MAX(delivery_date) AS last_order
       FROM orders
       WHERE customer_id IS NOT NULL

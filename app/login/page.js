@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BloomMark } from "@/components/ui";
+import { Petals } from "@/components/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,8 +33,10 @@ export default function LoginPage() {
 
   return (
     <div className="login-wrap">
-      <div className="card login-card">
+      <Petals />
+      <div className="card login-card" style={{ position: "relative", zIndex: 1 }}>
         <div className="login-logo">
+          <div className="mark"><BloomMark size={44} /></div>
           <div className="name">Petalique Flora</div>
           <div className="sub">Studio operations — team sign in</div>
         </div>

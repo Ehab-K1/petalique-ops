@@ -33,6 +33,20 @@ export async function PATCH(request) {
   if (!b.id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
   const sql = await db();
 
+  if (b.edit) {
+    if (!b.variety || !b.intake_date) {
+      return NextResponse.json({ error: "Variety and intake date are required." }, { status: 400 });
+    }
+    await sql`UPDATE inventory_batches SET
+      variety = ${String(b.variety).trim()},
+      quantity = ${Math.max(0, parseInt(b.quantity, 10) || 0)},
+      unit_cost = ${b.unit_cost === "" || b.unit_cost == null ? null : Number(b.unit_cost)},
+      intake_date = ${b.intake_date},
+      source = ${String(b.source || "").trim()}
+      WHERE id = ${b.id}`;
+    return NextResponse.json({ ok: true });
+  }
+
   if (b.quantity !== undefined) {
     await sql`UPDATE inventory_batches SET quantity = ${Math.max(0, parseInt(b.quantity, 10) || 0)} WHERE id = ${b.id}`;
   }

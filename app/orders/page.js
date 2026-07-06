@@ -10,11 +10,13 @@ export default async function OrdersPage() {
   const sql = await db();
 
   const orders = await sql`
-    SELECT * FROM orders
-    ORDER BY (status IN ('delivered','cancelled')) ASC, delivery_date ASC, delivery_time ASC
-    LIMIT 300`;
+    SELECT o.*, u.name AS assigned_name FROM orders o
+    LEFT JOIN users u ON u.id = o.assigned_user_id
+    ORDER BY (o.status IN ('delivered','picked_up','cancelled')) ASC, o.delivery_date ASC, o.delivery_time ASC
+    LIMIT 400`;
 
   const customers = await sql`SELECT id, name, phone, type FROM customers ORDER BY name ASC`;
+  const users = await sql`SELECT id, name FROM users ORDER BY name ASC`;
 
   const plain = (rows) => JSON.parse(JSON.stringify(rows));
 
@@ -22,11 +24,11 @@ export default async function OrdersPage() {
     <>
       <Nav user={user} />
       <div className="page">
-        <div className="page-title">Deliveries and orders</div>
+        <div className="page-title">Orders</div>
         <div className="page-sub">
-          Every order in one place: who, what, when, where, paid or not. No more spreadsheet and group chat.
+          Every delivery and pickup in one place: who, what, when, where, who sold it, paid or not.
         </div>
-        <OrdersClient orders={plain(orders)} customers={plain(customers)} />
+        <OrdersClient orders={plain(orders)} customers={plain(customers)} users={plain(users)} />
       </div>
     </>
   );

@@ -3,6 +3,23 @@ import crypto from "crypto";
 import { db, invoiceTotals } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 
+// This route reads raw Postgres rows directly, so DATE columns arrive as JS Date
+// objects (not the ISO strings a client component would get after Next.js
+// serializes props). String(dateObject).slice(0,10) silently produces garbage —
+// that was the cause of "convert to order" failing whenever the invoice had a
+// due date set. Same root cause as the Invalid Date PDF bug, different file.
+function toISODate(d) {
+  if (!d) return "";
+  if (d instanceof Date) {
+    if (isNaN(d.getTime())) return "";
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
+
 // items keep a flexible shape: {section, name, detail, qty, price}.
 // `section` groups rows under a day/event header (e.g. "Friday, August 7, 2026").
 // `detail` is the description line shown under the item name on the document.
@@ -70,6 +87,8 @@ export async function PATCH(request) {
   if (!b.id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
   const sql = await db();
 
+  try {
+
   if (b.status !== undefined) {
     await sql`UPDATE invoices SET status = ${b.status} WHERE id = ${b.id}`;
   }
@@ -131,7 +150,7 @@ export async function PATCH(request) {
       || String(inv.notes || "").slice(0, 500) || "See invoice for details";
     const totals = invoiceTotals(inv);
     const today = new Date().toISOString().slice(0, 10);
-    const dueDate = inv.due_date ? String(inv.due_date).slice(0, 10) : "";
+    const dueDate = toISODate(inv.due_date);
     const deliveryDate = dueDate || today;
     const hasAddress = String(inv.customer_address || "").trim().length > 0;
     const notes = [
@@ -156,6 +175,11 @@ export async function PATCH(request) {
   }
 
   return NextResponse.json({ ok: true });
+
+  } catch (err) {
+    console.error("invoice PATCH error", err);
+    return NextResponse.json({ error: err.message || "Something went wrong. Please try again." }, { status: 500 });
+  }
 }
 
 export async function DELETE(request) {

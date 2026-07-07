@@ -575,30 +575,64 @@ tbody tr:hover { background: rgba(230, 236, 227, 0.4); }
   animation: pop 0.5s ease both;
 }
 @media (max-width: 560px) { .doc { padding: 24px 18px; } }
-.doc-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 30px; }
-.doc-brand { display: flex; gap: 12px; align-items: center; }
-.doc-brand .mark { width: 42px; height: 42px; }
-.doc-brand .name { font-family: var(--font-display); font-size: 22px; font-weight: 650; color: var(--green); }
-.doc-brand .tag { font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ink-soft); }
-.doc-kind { text-align: right; }
-.doc-kind .k {
-  font-family: var(--font-display); font-size: 26px; font-weight: 600;
-  color: var(--green); text-transform: uppercase; letter-spacing: 2px;
+
+/* centered brand header + rule, matching the printed quotation template */
+.doc-brand-center { text-align: center; margin-bottom: 18px; }
+.doc-brand-center .mark { display: inline-flex; margin-bottom: 6px; }
+.doc-brand-center .name { font-family: var(--font-display); font-size: 30px; font-weight: 650; color: var(--green); }
+.doc-brand-center .tag { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+.doc-brand-center .contact { font-size: 13px; color: var(--ink-soft); }
+.doc-rule { border: none; border-top: 1px solid var(--border); margin: 18px 0; }
+
+.doc-kind-center { text-align: center; margin-bottom: 24px; }
+.doc-kind-center .k {
+  font-family: var(--font-display); font-size: 22px; font-weight: 600;
+  color: var(--green); text-transform: uppercase; letter-spacing: 3px;
 }
-.doc-kind .n { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+.doc-kind-center .n { font-size: 13px; color: var(--ink-soft); margin-top: 4px; }
+
 .doc-meta { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 26px; }
 .doc-meta h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--ink-soft); margin-bottom: 6px; }
 .doc-meta .who { font-size: 14.5px; font-weight: 600; }
 .doc-meta .line { font-size: 13px; color: var(--ink-soft); }
-.doc table { margin: 8px 0 4px; }
-.doc th { border-bottom: 2px solid var(--green); color: var(--green); }
-.doc-totals { margin-left: auto; max-width: 260px; margin-top: 14px; }
+
+.doc table { margin: 8px 0 4px; border-collapse: separate; border-spacing: 0; }
+.doc th {
+  background: var(--green); color: #fff; border-bottom: none;
+  text-transform: uppercase; letter-spacing: 0.6px; font-size: 11px;
+  padding: 10px 10px;
+}
+.doc th:first-child { border-radius: 8px 0 0 8px; }
+.doc th:last-child { border-radius: 0 8px 8px 0; }
+.doc td { vertical-align: top; }
+.doc .item-name { font-weight: 600; font-size: 13.5px; color: var(--ink); }
+.doc .item-detail { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; line-height: 1.4; }
+.doc-section-row td {
+  background: var(--green-tint); color: var(--green-dark);
+  font-weight: 650; font-size: 13px; padding: 8px 10px;
+}
+
+.doc-totals { margin-left: auto; max-width: 300px; margin-top: 14px; }
 .doc-totals .trow { display: flex; justify-content: space-between; padding: 5px 0; font-size: 14px; }
 .doc-totals .trow.grand {
   border-top: 2px solid var(--green); margin-top: 6px; padding-top: 10px;
   font-weight: 700; font-size: 17px; color: var(--green);
   font-family: var(--font-display);
 }
+.doc-totals .trow.deposit {
+  background: var(--amber-tint); color: var(--amber);
+  font-weight: 650; border-radius: 8px; padding: 8px 10px; margin-top: 6px;
+}
+
+.doc-steps {
+  margin-top: 28px; background: var(--bg); border-radius: 14px;
+  padding: 16px 18px; border-left: 4px solid var(--green);
+}
+.doc-steps-title { font-family: var(--font-display); font-weight: 650; color: var(--green); font-size: 15px; margin-bottom: 8px; }
+.doc-steps ol { margin: 0; padding-left: 20px; }
+.doc-steps li { font-size: 13.5px; color: var(--ink); margin-bottom: 5px; line-height: 1.5; }
+.doc-steps li:last-child { margin-bottom: 0; }
+
 .doc-notes { margin-top: 26px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 13px; color: var(--ink-soft); }
 .doc-foot { text-align: center; margin-top: 30px; font-size: 12.5px; color: var(--ink-soft); font-style: italic; }
 

@@ -15,11 +15,22 @@ const BLANK = {
   kind: "invoice",
   customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_address: "",
   order_id: "",
-  items: [{ desc: "", qty: 1, price: "" }],
+  items: [{ section: "", name: "", detail: "", qty: 1, price: "" }],
   tax_rate: 13, discount: 0,
   issue_date: new Date().toISOString().slice(0, 10),
-  due_date: "", notes: "",
+  due_date: "", event_date: "", deposit_pct: "", notes: "",
 };
+
+// backward-compat: older invoices were saved with {desc, qty, price} only
+function normalizeItem(it) {
+  return {
+    section: it.section || "",
+    name: it.name ?? it.desc ?? "",
+    detail: it.detail || "",
+    qty: it.qty ?? 1,
+    price: it.price ?? "",
+  };
+}
 
 function totalsOf(items, taxRate, discount) {
   const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.price) || 0), 0);
@@ -76,9 +87,9 @@ export default function InvoicesClient({ invoices, customers, orders }) {
         ...form,
         order_id: o.id,
         customer_name: form.customer_name || o.customer_name,
-        items: form.items.some((it) => it.desc)
+        items: form.items.some((it) => it.name)
           ? form.items
-          : [{ desc: o.items_desc || "Floral arrangement", qty: 1, price: Number(o.total) || "" }],
+          : [{ section: "", name: o.items_desc || "Floral arrangement", detail: "", qty: 1, price: Number(o.total) || "" }],
       });
     } else {
       setForm({ ...form, order_id: "" });
@@ -115,11 +126,15 @@ export default function InvoicesClient({ invoices, customers, orders }) {
       customer_phone: inv.customer_phone || "",
       customer_address: inv.customer_address || "",
       order_id: inv.order_id || "",
-      items: Array.isArray(inv.items) && inv.items.length ? inv.items : [{ desc: "", qty: 1, price: "" }],
+      items: Array.isArray(inv.items) && inv.items.length
+        ? inv.items.map(normalizeItem)
+        : [{ section: "", name: "", detail: "", qty: 1, price: "" }],
       tax_rate: inv.tax_rate ?? 13,
       discount: inv.discount ?? 0,
       issue_date: String(inv.issue_date).slice(0, 10),
       due_date: inv.due_date ? String(inv.due_date).slice(0, 10) : "",
+      event_date: inv.event_date || "",
+      deposit_pct: inv.deposit_pct || "",
       notes: inv.notes || "",
     });
     setEditing(inv);
@@ -191,25 +206,33 @@ export default function InvoicesClient({ invoices, customers, orders }) {
         <span style={{ display: "block", fontSize: 12, fontWeight: 550, color: "var(--ink-soft)", marginBottom: 6 }}>
           Line items
         </span>
-        <div className="stack" style={{ gap: 8 }}>
+        <div className="stack" style={{ gap: 10 }}>
           {form.items.map((it, i) => (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 64px 90px 30px", gap: 8, alignItems: "center" }}>
-              <input placeholder="Description — e.g. Bridal bouquet, garden roses" value={it.desc}
-                onChange={(e) => setItem(i, { desc: e.target.value })} />
-              <input type="number" min="0" step="1" placeholder="Qty" value={it.qty}
-                onChange={(e) => setItem(i, { qty: e.target.value })} />
-              <input type="number" min="0" step="0.01" placeholder="Price" value={it.price}
-                onChange={(e) => setItem(i, { price: e.target.value })} />
-              <button type="button" className="modal-x" style={{ width: 26, height: 26, fontSize: 12 }}
-                onClick={() => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })}
-                disabled={form.items.length === 1}>
-                ✕
-              </button>
+            <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: 10 }}>
+              <input placeholder="Day / section header, optional — e.g. Friday, August 7, 2026"
+                value={it.section} onChange={(e) => setItem(i, { section: e.target.value })}
+                style={{ fontSize: 12.5, marginBottom: 8 }} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 64px 90px 30px", gap: 8, alignItems: "center" }}>
+                <input placeholder="Item name — e.g. Bridal Bouquet (Red & White)" value={it.name}
+                  onChange={(e) => setItem(i, { name: e.target.value })} />
+                <input type="number" min="0" step="1" placeholder="Qty" value={it.qty}
+                  onChange={(e) => setItem(i, { qty: e.target.value })} />
+                <input type="number" min="0" step="0.01" placeholder="Price" value={it.price}
+                  onChange={(e) => setItem(i, { price: e.target.value })} />
+                <button type="button" className="modal-x" style={{ width: 26, height: 26, fontSize: 12 }}
+                  onClick={() => setForm({ ...form, items: form.items.filter((_, idx) => idx !== i) })}
+                  disabled={form.items.length === 1}>
+                  ✕
+                </button>
+              </div>
+              <textarea rows={2} placeholder="Description shown under the item name, optional — e.g. A beautiful arrangement of 12 mixed red and white roses…"
+                value={it.detail} onChange={(e) => setItem(i, { detail: e.target.value })}
+                style={{ marginTop: 8, fontSize: 13 }} />
             </div>
           ))}
         </div>
         <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
-          onClick={() => setForm({ ...form, items: [...form.items, { desc: "", qty: 1, price: "" }] })}>
+          onClick={() => setForm({ ...form, items: [...form.items, { section: "", name: "", detail: "", qty: 1, price: "" }] })}>
           + Add line
         </button>
       </div>
@@ -236,10 +259,22 @@ export default function InvoicesClient({ invoices, customers, orders }) {
           <input type="date" value={form.due_date} onChange={(e) => setForm({ ...form, due_date: e.target.value })} />
         </label>
       </div>
+      <div className="form-grid-2">
+        <label className="field">
+          <span>Event date(s), optional</span>
+          <input value={form.event_date} onChange={(e) => setForm({ ...form, event_date: e.target.value })}
+            placeholder="e.g. Aug 7 & Aug 8, 2026" />
+        </label>
+        <label className="field">
+          <span>Deposit % to secure booking, optional</span>
+          <input type="number" min="0" max="100" step="1" value={form.deposit_pct}
+            onChange={(e) => setForm({ ...form, deposit_pct: e.target.value })} placeholder="50" />
+        </label>
+      </div>
       <label className="field">
-        <span>Notes on the document, optional</span>
-        <textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          placeholder="Payment by e-transfer to hello@petaliqueflora.com · 50% deposit to confirm" />
+        <span>Notes / booking steps, optional — one per line, numbered automatically</span>
+        <textarea rows={3} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          placeholder={"Please review the quotation details above for accuracy.\nSend Interac e-Transfer to: hello@petaliqueflora.com\nFinal floral requests must be finalized 14 days prior to the event."} />
       </label>
 
       <div className="doc-totals" style={{ maxWidth: "none" }}>
@@ -327,6 +362,22 @@ export default function InvoicesClient({ invoices, customers, orders }) {
                       }
                     }}>
                     Convert to invoice
+                  </button>
+                )}
+                {inv.order_id ? (
+                  <span className="pill pill-green">Order #{inv.order_id}</span>
+                ) : (
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={async () => {
+                      const res = await api("PATCH", { id: inv.id, convertToOrder: true });
+                      const d = await res.json().catch(() => ({}));
+                      if (res.ok) {
+                        toast(d.orderId ? `Order #${d.orderId} created` : "Converted to order");
+                      } else {
+                        toast(d.error || "Could not convert to an order.", "err");
+                      }
+                    }}>
+                    → Convert to order
                   </button>
                 )}
                 <button className="btn btn-ghost btn-sm" onClick={() => startEdit(inv)}>Edit</button>

@@ -1,12 +1,33 @@
+// Server components read raw Postgres rows, where DATE columns arrive as JS Date
+// objects (UTC midnight) rather than strings. Client components instead receive
+// props already JSON-serialized by Next.js, where the same column is an ISO string.
+// String(dateObject).slice(0,10) silently produces garbage (e.g. "Sun Jul 06") which
+// then parses as Invalid Date — that's the "works in the app, Invalid Date on the
+// PDF" bug. Normalize both shapes to a YYYY-MM-DD string via UTC getters first.
+function toISODateString(d) {
+  if (d instanceof Date) {
+    if (isNaN(d.getTime())) return "";
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+  return String(d).slice(0, 10);
+}
+
 export function fmtDate(d) {
   if (!d) return "—";
-  const date = new Date(String(d).slice(0, 10) + "T00:00:00");
+  const iso = toISODateString(d);
+  const date = new Date(iso + "T00:00:00");
+  if (isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
 }
 
 export function fmtDateLong(d) {
   if (!d) return "—";
-  const date = new Date(String(d).slice(0, 10) + "T00:00:00");
+  const iso = toISODateString(d);
+  const date = new Date(iso + "T00:00:00");
+  if (isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
 }
 
@@ -17,7 +38,10 @@ export function money(n) {
 
 export function daysSince(d) {
   if (!d) return 0;
-  const ms = Date.now() - new Date(String(d).slice(0, 10) + "T00:00:00").getTime();
+  const iso = toISODateString(d);
+  const t = new Date(iso + "T00:00:00").getTime();
+  if (isNaN(t)) return 0;
+  const ms = Date.now() - t;
   return Math.max(0, Math.floor(ms / 86400000));
 }
 

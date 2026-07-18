@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 
 /* ---------- toast system ---------- */
 export function toast(message, type = "ok") {
@@ -98,29 +98,12 @@ export function CountUp({ value, money: isMoney = false, duration = 900 }) {
   return <>{Math.round(display).toLocaleString("en-CA")}</>;
 }
 
-/* ---------- 3D tilt wrapper ---------- */
-export function Tilt({ children, max = 7, className, style }) {
-  const ref = useRef(null);
-  const onMove = useCallback((e) => {
-    const el = ref.current;
-    if (!el || window.matchMedia("(pointer: coarse)").matches) return;
-    const r = el.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width - 0.5;
-    const py = (e.clientY - r.top) / r.height - 0.5;
-    el.style.transform = `perspective(700px) rotateY(${px * max}deg) rotateX(${-py * max}deg) translateY(-3px)`;
-  }, [max]);
-  const onLeave = useCallback(() => {
-    const el = ref.current;
-    if (el) el.style.transform = "";
-  }, []);
+/* ---------- Tilt (retired) ----------
+   Kept as a plain container so existing call sites render unchanged.
+   The 3D hover effect was removed in the v3.1 design pass. */
+export function Tilt({ children, className, style }) {
   return (
-    <div
-      ref={ref}
-      className={className}
-      style={{ transition: "transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)", willChange: "transform", ...style }}
-      onMouseMove={onMove}
-      onMouseLeave={onLeave}
-    >
+    <div className={className} style={style}>
       {children}
     </div>
   );
@@ -192,34 +175,9 @@ export function PrintButton({ label = "Download PDF / Print" }) {
   );
 }
 
-/* ---------- floating petals (login + public form ambience) ---------- */
-const PETALS = [
-  { left: "8%", size: 26, delay: 0, dur: 14, color: "#e9d3da" },
-  { left: "22%", size: 16, delay: 3, dur: 18, color: "#dce7d4" },
-  { left: "38%", size: 20, delay: 7, dur: 16, color: "#f2e8d5" },
-  { left: "56%", size: 14, delay: 1.5, dur: 20, color: "#e9d3da" },
-  { left: "71%", size: 24, delay: 5, dur: 15, color: "#dce7d4" },
-  { left: "86%", size: 18, delay: 9, dur: 19, color: "#f1e6e9" },
-];
-
+/* ---------- Petals (retired) ----------
+   The floating-petal ambience was removed in the v3.1 design pass; the export
+   stays as a no-op so nothing breaks if it's referenced. */
 export function Petals() {
-  return (
-    <>
-      {PETALS.map((p, i) => (
-        <span
-          key={i}
-          className="petal"
-          style={{
-            left: p.left,
-            top: "-40px",
-            width: p.size,
-            height: p.size * 1.25,
-            background: p.color,
-            animationDuration: `${p.dur}s`,
-            animationDelay: `${p.delay}s`,
-          }}
-        />
-      ))}
-    </>
-  );
+  return null;
 }

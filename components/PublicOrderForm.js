@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { BloomMark } from "@/components/ui";
-import { Petals, Segmented } from "@/components/client";
+import { Segmented } from "@/components/client";
 
 const OCCASIONS = ["Birthday", "Anniversary", "Wedding", "Sympathy", "New baby", "Get well", "Just because", "Corporate event", "Other"];
 const CONTACT_METHODS = ["Phone call", "Text message", "Email", "WhatsApp"];
@@ -69,9 +69,8 @@ export default function PublicOrderForm({ products, addons, business }) {
   const minDate = new Date().toISOString().slice(0, 10);
 
   return (
-    <div style={{ position: "relative", overflow: "hidden", minHeight: "100vh" }}>
-      <Petals />
-      <div className="public-wrap" style={{ position: "relative", zIndex: 1 }}>
+    <div style={{ minHeight: "100vh" }}>
+      <div className="public-wrap">
         <div className="public-hero">
           <div className="mark"><BloomMark size={52} /></div>
           <h1>{business.name}</h1>
@@ -123,7 +122,7 @@ export default function PublicOrderForm({ products, addons, business }) {
                 </label>
               </div>
 
-              <div className="form-section">🌷 What would you like? *</div>
+              <div className="form-section">What would you like? *</div>
               <div className="chip-group">
                 {products.map((p) => (
                   <label key={p.name} className={"chip" + (form.products.includes(p.name) ? " on" : "")}>
@@ -148,7 +147,7 @@ export default function PublicOrderForm({ products, addons, business }) {
 
               {addons.length > 0 && (
                 <>
-                  <div className="form-section">✨ Customization add-ons, optional</div>
+                  <div className="form-section">Customization add-ons, optional</div>
                   <div className="chip-group">
                     {addons.map((a) => (
                       <label key={a.name} className={"chip" + (form.addons.includes(a.name) ? " on" : "")}>
@@ -182,7 +181,7 @@ export default function PublicOrderForm({ products, addons, business }) {
 
               <div style={{ display: "flex", justifyContent: "center", margin: "4px 0" }}>
                 <Segmented
-                  options={[["delivery", "🚗 Deliver it"], ["pickup", "🏪 I'll pick up"]]}
+                  options={[["delivery", "Deliver it"], ["pickup", "I'll pick up"]]}
                   value={form.fulfillment_type}
                   onChange={(v) => setForm({ ...form, fulfillment_type: v })}
                 />
@@ -196,7 +195,7 @@ export default function PublicOrderForm({ products, addons, business }) {
                 </label>
               ) : (
                 <p className="muted" style={{ textAlign: "center" }}>
-                  We&apos;ll confirm the pickup time and studio address with you directly. 💐
+                  We&apos;ll confirm the pickup time and studio address with you directly.
                 </p>
               )}
 
@@ -214,7 +213,7 @@ export default function PublicOrderForm({ products, addons, business }) {
                 </label>
               </div>
 
-              <div className="form-section">📞 How should we reach you?</div>
+              <div className="form-section">How should we reach you?</div>
               <label className="field">
                 <span>Best way to contact you *</span>
                 <select value={form.preferred_contact}
@@ -228,7 +227,7 @@ export default function PublicOrderForm({ products, addons, business }) {
                 <input type="checkbox" checked={form.marketing_optin}
                   onChange={(e) => setForm({ ...form, marketing_optin: e.target.checked })} />
                 <span>
-                  🌷 Yes! I want updates, offers, and news from {business.name} — exclusive seasonal
+                  Yes, I&apos;d like updates, offers, and news from {business.name} — seasonal
                   deals, new bouquet launches, and pre-order opportunities. Unsubscribe anytime.
                 </span>
               </label>
@@ -243,7 +242,7 @@ export default function PublicOrderForm({ products, addons, business }) {
 
               {error && <div className="error-text">{error}</div>}
               <button className="btn btn-block" type="submit" disabled={sending}>
-                {sending ? "Sending…" : "Send my request 🌸"}
+                {sending ? "Sending…" : "Send my request"}
               </button>
               <p className="muted" style={{ textAlign: "center", fontSize: 12 }}>
                 No payment now — we confirm price and availability first.

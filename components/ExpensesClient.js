@@ -6,15 +6,15 @@ import { fmtDate, money, Leaderboard } from "./ui";
 import { Modal, toast, toastUndo, CountUp, Tilt } from "./client";
 
 export const CATEGORIES = [
-  ["flowers", "🌷 Flowers & stems"],
-  ["materials", "🎀 Materials & supplies"],
-  ["services", "🧾 Services & subscriptions"],
-  ["legal", "⚖️ Legal & professional"],
-  ["payroll", "👥 Payroll & people"],
-  ["delivery", "🚗 Delivery & fuel"],
-  ["marketing", "📣 Marketing & ads"],
-  ["rent", "🏠 Rent & utilities"],
-  ["other", "📦 Other"],
+  ["flowers", "Flowers & stems"],
+  ["materials", "Materials & supplies"],
+  ["services", "Services & subscriptions"],
+  ["legal", "Legal & professional"],
+  ["payroll", "Payroll & people"],
+  ["delivery", "Delivery & fuel"],
+  ["marketing", "Marketing & ads"],
+  ["rent", "Rent & utilities"],
+  ["other", "Other"],
 ];
 
 const catLabel = (c) => (CATEGORIES.find(([v]) => v === c) || [])[1] || c;
@@ -254,7 +254,7 @@ export default function ExpensesClient({ expenses, thisMonth, lastMonth, thisYea
               </div>
               <div className="row-side">
                 <span className="pill pill-wine">{catLabel(x.category)}</span>
-                {x.recurring && <span className="pill pill-gold">↻ Recurring</span>}
+                {x.recurring && <span className="pill pill-gold">Recurring</span>}
                 <button className="btn btn-ghost btn-sm" onClick={() => startEdit(x)}>Edit</button>
                 <button className="btn-danger btn" onClick={() => removeExpense(x)}>Delete</button>
               </div>

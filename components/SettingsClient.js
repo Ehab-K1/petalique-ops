@@ -94,7 +94,7 @@ export default function SettingsClient({ business, catalog }) {
       <div className="tabs">
         <button className={"tab" + (tab === "business" ? " on" : "")} onClick={() => setTab("business")}>Business</button>
         <button className={"tab" + (tab === "catalog" ? " on" : "")} onClick={() => setTab("catalog")}>Product catalog</button>
-        <button className={"tab" + (tab === "trash" ? " on" : "")} onClick={() => setTab("trash")}>🗑 Trash</button>
+        <button className={"tab" + (tab === "trash" ? " on" : "")} onClick={() => setTab("trash")}>Trash</button>
       </div>
 
       {tab === "business" && (
@@ -214,7 +214,7 @@ export default function SettingsClient({ business, catalog }) {
                 <div className="row-sub" style={{ textTransform: "capitalize" }}>{item.entity} · {item.sub}</div>
               </div>
               <div className="row-side">
-                <button className="btn btn-ghost btn-sm" onClick={() => trashAction(item, "restore")}>↩ Restore</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => trashAction(item, "restore")}>Restore</button>
                 <button className="btn-danger btn" onClick={() => trashAction(item, "purge")}>Delete forever</button>
               </div>
             </div>

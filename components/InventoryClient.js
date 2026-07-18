@@ -205,7 +205,7 @@ export default function InventoryClient({ batches, openOrders }) {
                 {confirmId === item.id ? (
                   <>
                     <span className="error-text">Delete?</span>
-                    <button className="btn btn-sm" style={{ background: "#a8462b" }}
+                    <button className="btn btn-sm" style={{ background: "#a04a2e" }}
                       onClick={() => { api("DELETE", { id: item.id }, "Batch deleted"); setConfirmId(null); }}>
                       Yes
                     </button>

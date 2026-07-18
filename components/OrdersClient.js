@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { fmtDate, money, StatusPill } from "./ui";
 import { Modal, Segmented, CopyButton, toast, toastUndo } from "./client";
+import { IconLink } from "./icons";
 import OrderForm, { blankOrder, orderToForm } from "./OrderForm";
 
 const DELIVERY_STATUSES = [
@@ -253,13 +254,13 @@ export default function OrdersClient({ orders, customers, users }) {
                   {o.occasion ? ` · ${o.occasion}` : ""}
                   {o.assigned_name ? ` · sold by ${o.assigned_name}` : ""}
                 </div>
-                {!isPickup && o.address && <div className="row-sub">📍 {o.address}</div>}
+                {!isPickup && o.address && <div className="row-sub">{o.address}</div>}
                 {o.items_desc && <div className="row-sub" style={{ color: "var(--ink)" }}>{o.items_desc}</div>}
                 {o.notes && <div className="row-sub">Note: {o.notes}</div>}
               </div>
               <div className="row-side">
                 <span className={"pill " + (isPickup ? "pill-green" : "pill-wine")}>
-                  {isPickup ? "🏪 Pickup" : "🚗 Delivery"}
+                  {isPickup ? "Pickup" : "Delivery"}
                 </span>
                 {isOverdue && <span className="pill pill-rust pill-pulse">Overdue</span>}
                 {d === today && !done && <span className="pill pill-amber">Today</span>}
@@ -303,7 +304,7 @@ export default function OrdersClient({ orders, customers, users }) {
   return (
     <>
       <div className="share-box" style={{ marginBottom: 14 }}>
-        <span>🌸</span>
+        <span className="share-icn"><IconLink size={14} /></span>
         <code>{origin}/order</code>
         <CopyButton text={`${origin}/order`} label="Copy order form link" small />
       </div>

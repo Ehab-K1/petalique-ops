@@ -98,7 +98,7 @@ export default function CustomerDetail({ customer, orders, invoices, payments, a
         <div className="detail-actions">
           <Link href={`/orders?new=1&customer=${customer.id}`} className="btn btn-sm">+ New order</Link>
           <Link href={`/invoices?new=1&customer=${customer.id}`} className="btn btn-ghost btn-sm">+ Invoice</Link>
-          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>✏️ Edit</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
           {isAdmin && <button className="btn btn-ghost btn-sm" onClick={() => setMerging(true)}>Merge duplicate</button>}
           <button className="btn-danger btn" onClick={removeCustomer}>Delete</button>
         </div>

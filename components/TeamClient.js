@@ -136,7 +136,7 @@ export default function TeamClient({ users, me }) {
                 confirmId === u.id ? (
                   <>
                     <span className="error-text">Remove?</span>
-                    <button className="btn btn-sm" style={{ background: "#a8462b" }}
+                    <button className="btn btn-sm" style={{ background: "#a04a2e" }}
                       onClick={() => { api("DELETE", { id: u.id }, "Removed"); setConfirmId(null); }}>
                       Yes
                     </button>

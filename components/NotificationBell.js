@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { IconFlower, IconClock, IconAlert, IconFile, IconLeaf } from "./icons";
 
 const KIND_ICON = {
-  inquiry: "🌸", today: "⏰", overdue: "🔥", invoice: "🧾", stock: "🌿",
+  inquiry: IconFlower, today: IconClock, overdue: IconAlert, invoice: IconFile, stock: IconLeaf,
 };
 
 /* Live attention feed — new inquiries, deliveries due, overdue invoices, aging stock. */
@@ -49,17 +50,20 @@ export default function NotificationBell() {
               <span className="muted" style={{ fontSize: 12 }}>{data.count} item{data.count === 1 ? "" : "s"}</span>
             </div>
             {data.items.length === 0 ? (
-              <div className="palette-hint">All clear — nothing needs you right now. 🌷</div>
+              <div className="palette-hint">All clear — nothing needs your attention right now.</div>
             ) : (
-              data.items.map((n, i) => (
-                <Link key={i} href={n.href} className="menu-item bell-item" onClick={() => setOpen(false)}>
-                  <span>{KIND_ICON[n.kind] || "•"}</span>
-                  <span className="bell-item-main">
-                    <span className="bell-item-title">{n.title}</span>
-                    <span className="bell-item-sub">{n.sub}</span>
-                  </span>
-                </Link>
-              ))
+              data.items.map((n, i) => {
+                const Ic = KIND_ICON[n.kind] || IconClock;
+                return (
+                  <Link key={i} href={n.href} className="menu-item bell-item" onClick={() => setOpen(false)}>
+                    <span className={"menu-icon bell-kind bell-kind-" + n.kind}><Ic size={14} /></span>
+                    <span className="bell-item-main">
+                      <span className="bell-item-title">{n.title}</span>
+                      <span className="bell-item-sub">{n.sub}</span>
+                    </span>
+                  </Link>
+                );
+              })
             )}
           </div>
         </>

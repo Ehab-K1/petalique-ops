@@ -240,7 +240,7 @@ export default async function ReportsPage({ searchParams }) {
             </div>
           </div>
           {arRows.length === 0 ? (
-            <div className="empty">No open invoice balances. 🎉</div>
+            <div className="empty">No open invoice balances.</div>
           ) : (
             arRows.slice(0, 12).map((r) => (
               <div className="row" key={r.id}>

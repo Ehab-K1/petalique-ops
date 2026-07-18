@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { IconUser, IconFlower, IconFile, IconBanknote } from "./icons";
 
-const TYPE_ICON = { customer: "👤", order: "🌸", invoice: "🧾", payment: "💵" };
+const TYPE_ICON = { customer: IconUser, order: IconFlower, invoice: IconFile, payment: IconBanknote };
 const TYPE_LABEL = { customer: "Customer", order: "Order", invoice: "Invoice", payment: "Payment" };
 
 /* ⌘K global search — customers, orders, invoices and payments in one jump. */
@@ -83,21 +84,24 @@ export default function CommandPalette({ onClose }) {
               Type a name, phone number, invoice #, or order # — press ↵ to open.
             </div>
           )}
-          {results.map((r, i) => (
+          {results.map((r, i) => {
+            const Ic = TYPE_ICON[r.type] || IconFile;
+            return (
             <button
               key={`${r.type}-${r.id}`}
               className={"palette-row" + (i === active ? " active" : "")}
               onMouseEnter={() => setActive(i)}
               onClick={() => go(r)}
             >
-              <span className="palette-icon">{TYPE_ICON[r.type] || "•"}</span>
+              <span className="palette-icon"><Ic size={15} /></span>
               <span className="palette-main">
                 <span className="palette-title">{r.title}</span>
                 <span className="palette-sub">{r.sub}</span>
               </span>
               <span className="palette-type">{TYPE_LABEL[r.type] || r.type}</span>
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

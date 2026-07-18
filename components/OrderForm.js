@@ -100,7 +100,7 @@ export default function OrderForm({ initial, editingId, customers = [], users = 
     <form className="stack" onSubmit={submit}>
       <div style={{ display: "flex", justifyContent: "center" }}>
         <Segmented
-          options={[["delivery", "🚗 Delivery"], ["pickup", "🏪 Pickup"]]}
+          options={[["delivery", "Delivery"], ["pickup", "Pickup"]]}
           value={form.fulfillment_type}
           onChange={(v) => setForm({ ...form, fulfillment_type: v })}
         />

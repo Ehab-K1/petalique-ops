@@ -77,19 +77,19 @@ export function StatusPill({ status }) {
 
 export function FreshMeter({ intakeDate }) {
   const days = daysSince(intakeDate);
-  let color = "#2f4a3c";
+  let color = "#2e4638";
   let label = "Fresh";
   let dots = 5;
-  if (days > 7) { color = "#a8462b"; label = "Aging fast"; dots = 1; }
-  else if (days > 5) { color = "#b4802a"; label = "Use soon"; dots = 2; }
-  else if (days > 3) { color = "#b4802a"; label = "Good"; dots = 3; }
+  if (days > 7) { color = "#a04a2e"; label = "Aging fast"; dots = 1; }
+  else if (days > 5) { color = "#96702a"; label = "Use soon"; dots = 2; }
+  else if (days > 3) { color = "#96702a"; label = "Good"; dots = 3; }
   return (
     <span className="fresh-meter" title={`${days} days since intake`}>
       {[0, 1, 2, 3, 4].map((i) => (
         <span
           key={i}
           className="fresh-dot"
-          style={{ background: i < dots ? color : "#dee3d4" }}
+          style={{ background: i < dots ? color : "#e3e1d6" }}
         />
       ))}
       <span style={{ fontSize: 12, fontWeight: 550, color, marginLeft: 4 }}>
@@ -101,8 +101,8 @@ export function FreshMeter({ intakeDate }) {
 
 /* Petalique flower mark — used in nav, login, invoices, public form */
 export function BloomMark({ size = 26, light = false }) {
-  const petal = light ? "#ffffff" : "#2f4a3c";
-  const heart = light ? "#e7cfa0" : "#c9a45c";
+  const petal = light ? "#ffffff" : "#2e4638";
+  const heart = light ? "#d9c39a" : "#b08d57";
   return (
     <svg viewBox="0 0 48 48" width={size} height={size} className="brand-mark" aria-hidden="true">
       {[0, 72, 144, 216, 288].map((r) => (
@@ -131,8 +131,8 @@ export function BarChart({ data, height = 150, prefix = "$" }) {
     <svg viewBox={`0 0 ${W} ${height + 34}`} className="chart-bars" role="img">
       <defs>
         <linearGradient id="pf-bar" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3e6450" />
-          <stop offset="100%" stopColor="#2f4a3c" />
+          <stop offset="0%" stopColor="#3c5a48" />
+          <stop offset="100%" stopColor="#2e4638" />
         </linearGradient>
       </defs>
       {data.map((d, i) => {
@@ -145,12 +145,12 @@ export function BarChart({ data, height = 150, prefix = "$" }) {
               className="bar"
               x={x} y={height - h} width={bw} height={h}
               rx={Math.min(6, bw / 3)}
-              fill={i === n - 1 ? "url(#pf-bar)" : "#cdd9c6"}
+              fill={i === n - 1 ? "url(#pf-bar)" : "#d8ddd0"}
               style={{ animationDelay: `${i * 0.05}s` }}
             />
             <text
               x={x + bw / 2} y={height + 16}
-              textAnchor="middle" fontSize="11" fill="#5b6357"
+              textAnchor="middle" fontSize="11" fill="#6d7263"
             >
               {d.label}
             </text>
@@ -158,7 +158,7 @@ export function BarChart({ data, height = 150, prefix = "$" }) {
               <text
                 x={x + bw / 2} y={height - h + 15}
                 textAnchor="middle" fontSize="10.5" fontWeight="600"
-                fill={i === n - 1 ? "#fff" : "#5b6357"}
+                fill={i === n - 1 ? "#fff" : "#6d7263"}
               >
                 {prefix}{Math.round(d.value) >= 1000 ? `${(d.value / 1000).toFixed(1)}k` : Math.round(d.value)}
               </text>
@@ -189,12 +189,12 @@ export function RevExpChart({ data, height = 150 }) {
           <g key={i}>
             <title>{`${d.label} — revenue $${Math.round(d.rev).toLocaleString("en-CA")}, expenses $${Math.round(d.exp).toLocaleString("en-CA")}, profit $${Math.round(profit).toLocaleString("en-CA")}`}</title>
             <rect className="bar" x={x} y={height - hr} width={bw} height={hr}
-              rx={Math.min(4, bw / 3)} fill="#2f4a3c"
+              rx={Math.min(4, bw / 3)} fill="#2e4638"
               style={{ animationDelay: `${i * 0.05}s` }} />
             <rect className="bar" x={x + bw + 3} y={height - he} width={bw} height={he}
-              rx={Math.min(4, bw / 3)} fill="#c58ba0"
+              rx={Math.min(4, bw / 3)} fill="#c09aa6"
               style={{ animationDelay: `${i * 0.05 + 0.03}s` }} />
-            <text x={x + gw / 2} y={height + 16} textAnchor="middle" fontSize="11" fill="#5b6357">
+            <text x={x + gw / 2} y={height + 16} textAnchor="middle" fontSize="11" fill="#6d7263">
               {d.label}
             </text>
           </g>
@@ -204,7 +204,7 @@ export function RevExpChart({ data, height = 150 }) {
   );
 }
 
-const DONUT_COLORS = ["#2f4a3c", "#c9a45c", "#6b3f4e", "#b4802a", "#8ba084", "#a8462b"];
+const DONUT_COLORS = ["#2e4638", "#b08d57", "#6d4450", "#96702a", "#8ba084", "#a04a2e"];
 
 export function Donut({ data, size = 132 }) {
   // data: [{ label, value }]
@@ -215,7 +215,7 @@ export function Donut({ data, size = 132 }) {
   return (
     <div className="donut-wrap">
       <svg viewBox="0 0 110 110" width={size} height={size} className="donut-ring">
-        <circle cx="55" cy="55" r={R} fill="none" stroke="#eef0ea" strokeWidth="15" />
+        <circle cx="55" cy="55" r={R} fill="none" stroke="#edece4" strokeWidth="15" />
         {data.map((d, i) => {
           const frac = d.value / total;
           const dash = `${frac * C} ${C}`;
@@ -237,10 +237,10 @@ export function Donut({ data, size = 132 }) {
             </circle>
           );
         })}
-        <text x="55" y="52" textAnchor="middle" fontSize="17" fontWeight="700" fill="#20281f">
+        <text x="55" y="52" textAnchor="middle" fontSize="17" fontWeight="700" fill="#23271f">
           {data.reduce((s, d) => s + d.value, 0)}
         </text>
-        <text x="55" y="66" textAnchor="middle" fontSize="8.5" fill="#5b6357">
+        <text x="55" y="66" textAnchor="middle" fontSize="8.5" fill="#6d7263">
           total
         </text>
       </svg>
@@ -265,8 +265,8 @@ export function Leaderboard({ rows, valueKey = "value", labelKey = "label", fmt 
         <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{
             width: 22, height: 22, borderRadius: 99, flexShrink: 0,
-            background: i === 0 ? "#f6edda" : "#eef0ea",
-            color: i === 0 ? "#8c6a1f" : "#5b6357",
+            background: i === 0 ? "#f3ecdf" : "#eeede6",
+            color: i === 0 ? "#8a6b3c" : "#6d7263",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
             fontSize: 11.5, fontWeight: 700,
           }}>
@@ -280,7 +280,7 @@ export function Leaderboard({ rows, valueKey = "value", labelKey = "label", fmt 
                 width: `${((Number(r[valueKey]) || 0) / max) * 100}%`,
                 animationDelay: `${i * 0.08}s`,
                 background: i === 0
-                  ? "linear-gradient(90deg, #d9b878, #c9a45c)"
+                  ? "#b08d57"
                   : undefined,
               }}
             />

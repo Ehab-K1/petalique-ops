@@ -192,7 +192,7 @@ export default async function Dashboard() {
 
         {newInquiries[0].c > 0 && (
           <div className="alert alert-info">
-            <div className="alert-title">🌸 New order inquiries</div>
+            <div className="alert-title">New order inquiries</div>
             <p>
               {newInquiries[0].c} new request{newInquiries[0].c === 1 ? "" : "s"} came in through your order form.{" "}
               <Link href="/orders?filter=webform" style={{ textDecoration: "underline", fontWeight: 600 }}>Review them →</Link>
@@ -279,8 +279,8 @@ export default async function Dashboard() {
             Revenue vs expenses, last 12 months
             <span className="spacer" />
             <span className="legend-item" style={{ fontSize: 12 }}>
-              <span className="dot" style={{ background: "#2f4a3c", marginRight: 4 }} />revenue
-              <span className="dot" style={{ background: "#c58ba0", margin: "0 4px 0 10px" }} />expenses
+              <span className="dot" style={{ background: "#2e4638", marginRight: 4 }} />revenue
+              <span className="dot" style={{ background: "#c09aa6", margin: "0 4px 0 10px" }} />expenses
             </span>
           </div>
           <RevExpChart data={series} />

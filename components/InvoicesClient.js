@@ -472,7 +472,7 @@ export default function InvoicesClient({ invoices, customers, orders, defaultTax
                 <CopyButton text={link} label="Copy share link" small />
                 {inv.kind === "invoice" && balance > 0 && (
                   <button className="btn btn-sm btn-gold" onClick={() => startPay(inv, balance)}>
-                    💵 Record payment
+                    Record payment
                   </button>
                 )}
                 <select

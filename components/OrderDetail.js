@@ -130,13 +130,13 @@ export default function OrderDetail({ order, payments, invoices, activity, custo
             {order.source === "invoice" && <span className="pill pill-gold">From invoice</span>}
           </div>
           <div className="detail-sub">
-            {isPickup ? "🏪 Pickup" : "🚗 Delivery"} · {fmtDateLong(order.delivery_date)}
+            {isPickup ? "Pickup" : "Delivery"} · {fmtDateLong(order.delivery_date)}
             {order.delivery_time ? ` at ${order.delivery_time}` : ""}
             {order.occasion ? ` · ${order.occasion}` : ""}
           </div>
         </div>
         <div className="detail-actions">
-          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>✏️ Edit</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>Edit</button>
           {!cancelled && (
             <button className="btn btn-ghost btn-sm" onClick={() => setStatus("cancelled")}>Cancel order</button>
           )}
@@ -174,9 +174,9 @@ export default function OrderDetail({ order, payments, invoices, activity, custo
             {order.items_desc && <div style={{ fontSize: 14, marginBottom: 8 }}>{order.items_desc}</div>}
             {order.product_types && <div className="row-sub">Products: {order.product_types}{order.quantity ? ` · Qty: ${order.quantity}` : ""}</div>}
             {order.addons && <div className="row-sub">Add-ons: {order.addons}</div>}
-            {!isPickup && order.address && <div className="row-sub">📍 {order.address}</div>}
-            {order.phone && <div className="row-sub">📞 {order.phone}{order.preferred_contact ? ` · prefers ${order.preferred_contact}` : ""}</div>}
-            {order.email && <div className="row-sub">✉️ {order.email}</div>}
+            {!isPickup && order.address && <div className="row-sub">Address: {order.address}</div>}
+            {order.phone && <div className="row-sub">Phone: {order.phone}{order.preferred_contact ? ` · prefers ${order.preferred_contact}` : ""}</div>}
+            {order.email && <div className="row-sub">Email: {order.email}</div>}
             {order.notes && <div className="row-sub" style={{ marginTop: 6 }}>Note: {order.notes}</div>}
             <div className="row-sub" style={{ marginTop: 8 }}>
               Type: {order.order_type} · Added {fmtDate(order.created_at)}

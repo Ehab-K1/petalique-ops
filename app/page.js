@@ -20,6 +20,27 @@ function deltaBadge(current, previous) {
   );
 }
 
+function timeAgo(ts) {
+  const t = new Date(ts).getTime();
+  if (isNaN(t)) return "";
+  const mins = Math.floor((Date.now() - t) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+const ENTITY_HREF = {
+  order: (id) => `/orders/${id}`,
+  customer: (id) => `/customers/${id}`,
+  invoice: (id) => `/invoices?open=${id}`,
+  payment: () => "/payments",
+  expense: () => "/expenses",
+  catalog: () => "/settings",
+  settings: () => "/settings",
+};
+
 export default async function Dashboard() {
   const user = await requireUser();
   const sql = await db();
@@ -27,17 +48,17 @@ export default async function Dashboard() {
   const upcoming = await sql`
     SELECT o.*, u.name AS assigned_name FROM orders o
     LEFT JOIN users u ON u.id = o.assigned_user_id
-    WHERE o.status NOT IN ('delivered','picked_up','cancelled')
+    WHERE o.deleted_at IS NULL AND o.status NOT IN ('delivered','picked_up','cancelled')
     ORDER BY o.delivery_date ASC, o.delivery_time ASC
     LIMIT 10`;
 
   const overdue = await sql`
     SELECT COUNT(*)::int AS c FROM orders
-    WHERE delivery_date < CURRENT_DATE AND status NOT IN ('delivered','picked_up','cancelled')`;
+    WHERE deleted_at IS NULL AND delivery_date < CURRENT_DATE AND status NOT IN ('delivered','picked_up','cancelled')`;
 
   const dueToday = await sql`
     SELECT COUNT(*)::int AS c FROM orders
-    WHERE delivery_date = CURRENT_DATE AND status NOT IN ('delivered','picked_up','cancelled')`;
+    WHERE deleted_at IS NULL AND delivery_date = CURRENT_DATE AND status NOT IN ('delivered','picked_up','cancelled')`;
 
   const aging = await sql`
     SELECT COUNT(*)::int AS c FROM inventory_batches
@@ -45,35 +66,35 @@ export default async function Dashboard() {
 
   const newInquiries = await sql`
     SELECT COUNT(*)::int AS c FROM orders
-    WHERE source = 'webform' AND status = 'pending'`;
+    WHERE deleted_at IS NULL AND source = 'webform' AND status = 'pending'`;
 
   const thisMonth = await sql`
     SELECT COALESCE(SUM(total),0)::numeric AS rev, COUNT(*)::int AS c
     FROM orders
-    WHERE status IN ('delivered','picked_up') AND delivery_date >= date_trunc('month', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND status IN ('delivered','picked_up') AND delivery_date >= date_trunc('month', CURRENT_DATE)`;
 
   const lastMonth = await sql`
     SELECT COALESCE(SUM(total),0)::numeric AS rev, COUNT(*)::int AS c
     FROM orders
-    WHERE status IN ('delivered','picked_up')
+    WHERE deleted_at IS NULL AND status IN ('delivered','picked_up')
       AND delivery_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
       AND delivery_date < date_trunc('month', CURRENT_DATE)`;
 
   const thisYear = await sql`
     SELECT COALESCE(SUM(total),0)::numeric AS rev, COUNT(*)::int AS c
     FROM orders
-    WHERE status IN ('delivered','picked_up') AND delivery_date >= date_trunc('year', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND status IN ('delivered','picked_up') AND delivery_date >= date_trunc('year', CURRENT_DATE)`;
 
   const unpaid = await sql`
     SELECT COALESCE(SUM(total),0)::numeric AS rev, COUNT(*)::int AS c
     FROM orders
-    WHERE payment_status <> 'paid' AND status <> 'cancelled'`;
+    WHERE deleted_at IS NULL AND payment_status <> 'paid' AND status <> 'cancelled'`;
 
   const monthly = await sql`
     SELECT to_char(date_trunc('month', delivery_date), 'YYYY-MM') AS m,
            SUM(total)::numeric AS rev
     FROM orders
-    WHERE status IN ('delivered','picked_up')
+    WHERE deleted_at IS NULL AND status IN ('delivered','picked_up')
       AND delivery_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
     GROUP BY 1 ORDER BY 1`;
 
@@ -81,27 +102,27 @@ export default async function Dashboard() {
     SELECT to_char(date_trunc('month', expense_date), 'YYYY-MM') AS m,
            SUM(amount)::numeric AS s
     FROM expenses
-    WHERE expense_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
     GROUP BY 1 ORDER BY 1`;
 
   const expThisMonth = await sql`
     SELECT COALESCE(SUM(amount),0)::numeric AS s FROM expenses
-    WHERE expense_date >= date_trunc('month', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE)`;
 
   const expLastMonth = await sql`
     SELECT COALESCE(SUM(amount),0)::numeric AS s FROM expenses
-    WHERE expense_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
       AND expense_date < date_trunc('month', CURRENT_DATE)`;
 
   const expThisYear = await sql`
     SELECT COALESCE(SUM(amount),0)::numeric AS s FROM expenses
-    WHERE expense_date >= date_trunc('year', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('year', CURRENT_DATE)`;
 
   const team = await sql`
     SELECT u.name, COALESCE(SUM(o.total),0)::numeric AS rev, COUNT(o.id)::int AS c
     FROM users u
     LEFT JOIN orders o ON o.assigned_user_id = u.id
-      AND o.status <> 'cancelled'
+      AND o.status <> 'cancelled' AND o.deleted_at IS NULL
       AND o.delivery_date >= date_trunc('month', CURRENT_DATE)
     GROUP BY u.id, u.name
     ORDER BY rev DESC
@@ -110,14 +131,14 @@ export default async function Dashboard() {
   const fulfillment = await sql`
     SELECT fulfillment_type, COUNT(*)::int AS c
     FROM orders
-    WHERE status <> 'cancelled' AND delivery_date >= date_trunc('month', CURRENT_DATE)
+    WHERE deleted_at IS NULL AND status <> 'cancelled' AND delivery_date >= date_trunc('month', CURRENT_DATE)
     GROUP BY fulfillment_type`;
 
   const topCustomers = await sql`
-    SELECT customer_name, SUM(total)::numeric AS rev
-    FROM orders
-    WHERE status IN ('delivered','picked_up')
-    GROUP BY customer_name
+    SELECT c.id AS customer_id, COALESCE(c.name, o.customer_name) AS customer_name, SUM(o.total)::numeric AS rev
+    FROM orders o LEFT JOIN customers c ON c.id = o.customer_id
+    WHERE o.deleted_at IS NULL AND o.status IN ('delivered','picked_up')
+    GROUP BY c.id, COALESCE(c.name, o.customer_name)
     ORDER BY rev DESC
     LIMIT 5`;
 
@@ -128,6 +149,9 @@ export default async function Dashboard() {
     GROUP BY variety
     ORDER BY MIN(intake_date) ASC
     LIMIT 8`;
+
+  const feed = await sql`
+    SELECT * FROM activity ORDER BY created_at DESC LIMIT 12`;
 
   // build a full 12-month series (fill gaps with 0)
   const MONTH_LABELS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -164,14 +188,14 @@ export default async function Dashboard() {
       <Nav user={user} />
       <div className="page">
         <div className="page-title">Good {new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, {user.name.split(" ")[0]}</div>
-        <div className="page-sub">Here&apos;s how the studio is doing.</div>
+        <div className="page-sub">Here&apos;s how the studio is doing. Click any number to dig in.</div>
 
         {newInquiries[0].c > 0 && (
           <div className="alert alert-info">
             <div className="alert-title">🌸 New order inquiries</div>
             <p>
               {newInquiries[0].c} new request{newInquiries[0].c === 1 ? "" : "s"} came in through your order form.{" "}
-              <Link href="/orders" style={{ textDecoration: "underline", fontWeight: 600 }}>Review them →</Link>
+              <Link href="/orders?filter=webform" style={{ textDecoration: "underline", fontWeight: 600 }}>Review them →</Link>
             </p>
           </div>
         )}
@@ -179,32 +203,50 @@ export default async function Dashboard() {
         {hasAlerts && (
           <div className="alert">
             <div className="alert-title">Needs attention</div>
-            {overdue[0].c > 0 && <p>{overdue[0].c} order{overdue[0].c === 1 ? " is" : "s are"} past due.</p>}
-            {dueToday[0].c > 0 && <p>{dueToday[0].c} due today.</p>}
-            {aging[0].c > 0 && <p>{aging[0].c} stem batch{aging[0].c === 1 ? "" : "es"} at 7+ days old. Use or discount now.</p>}
+            {overdue[0].c > 0 && (
+              <p><Link href="/orders?filter=overdue" style={{ textDecoration: "underline" }}>{overdue[0].c} order{overdue[0].c === 1 ? " is" : "s are"} past due →</Link></p>
+            )}
+            {dueToday[0].c > 0 && (
+              <p><Link href="/orders?filter=today" style={{ textDecoration: "underline" }}>{dueToday[0].c} due today →</Link></p>
+            )}
+            {aging[0].c > 0 && (
+              <p><Link href="/inventory" style={{ textDecoration: "underline" }}>{aging[0].c} stem batch{aging[0].c === 1 ? "" : "es"} at 7+ days old. Use or discount now →</Link></p>
+            )}
           </div>
         )}
 
         <div className="grid grid-4 stagger" style={{ marginBottom: 16 }}>
-          <Tilt className="card stat">
-            <div className="stat-value"><CountUp value={thisMonth[0].rev} money /></div>
-            <div className="stat-label">
-              Revenue this month ({thisMonth[0].c} orders)
-              {deltaBadge(thisMonth[0].rev, lastMonth[0].rev)}
-            </div>
-          </Tilt>
-          <Tilt className="card stat">
-            <div className="stat-value"><CountUp value={lastMonth[0].rev} money /></div>
-            <div className="stat-label">Last month ({lastMonth[0].c} orders)</div>
-          </Tilt>
-          <Tilt className="card stat">
-            <div className="stat-value"><CountUp value={thisYear[0].rev} money /></div>
-            <div className="stat-label">This year ({thisYear[0].c} orders)</div>
-          </Tilt>
-          <Tilt className="card stat">
-            <div className="stat-value"><CountUp value={unpaid[0].rev} money /></div>
-            <div className="stat-label">Outstanding, unpaid ({unpaid[0].c} orders)</div>
-          </Tilt>
+          <Link href="/reports" className="stat-link">
+            <Tilt className="card stat">
+              <div className="stat-value"><CountUp value={thisMonth[0].rev} money /></div>
+              <div className="stat-label">
+                Revenue this month ({thisMonth[0].c} orders)
+                {deltaBadge(thisMonth[0].rev, lastMonth[0].rev)}
+              </div>
+              <div className="stat-hint">Open reports →</div>
+            </Tilt>
+          </Link>
+          <Link href="/reports?range=last_month" className="stat-link">
+            <Tilt className="card stat">
+              <div className="stat-value"><CountUp value={lastMonth[0].rev} money /></div>
+              <div className="stat-label">Last month ({lastMonth[0].c} orders)</div>
+              <div className="stat-hint">Open reports →</div>
+            </Tilt>
+          </Link>
+          <Link href="/reports?range=this_year" className="stat-link">
+            <Tilt className="card stat">
+              <div className="stat-value"><CountUp value={thisYear[0].rev} money /></div>
+              <div className="stat-label">This year ({thisYear[0].c} orders)</div>
+              <div className="stat-hint">Open reports →</div>
+            </Tilt>
+          </Link>
+          <Link href="/orders?filter=unpaid" className="stat-link">
+            <Tilt className="card stat">
+              <div className="stat-value"><CountUp value={unpaid[0].rev} money /></div>
+              <div className="stat-label">Outstanding, unpaid ({unpaid[0].c} orders)</div>
+              <div className="stat-hint">See who owes →</div>
+            </Tilt>
+          </Link>
         </div>
 
         <div className="grid grid-3 stagger" style={{ marginBottom: 16 }}>
@@ -217,13 +259,13 @@ export default async function Dashboard() {
               {deltaBadge(profitThisMonth, profitLastMonth)}
             </div>
           </Tilt>
-          <Tilt className="card stat">
-            <div className="stat-value"><CountUp value={expThisMonth[0].s} money /></div>
-            <div className="stat-label">
-              Expenses this month
-              <Link href="/expenses" style={{ marginLeft: 8, fontSize: 12, textDecoration: "underline" }}>details →</Link>
-            </div>
-          </Tilt>
+          <Link href="/expenses" className="stat-link">
+            <Tilt className="card stat">
+              <div className="stat-value"><CountUp value={expThisMonth[0].s} money /></div>
+              <div className="stat-label">Expenses this month</div>
+              <div className="stat-hint">Open expenses →</div>
+            </Tilt>
+          </Link>
           <Tilt className="card stat">
             <div className="stat-value" style={{ color: profitYear >= 0 ? "var(--green-bright)" : "var(--rust)" }}>
               <CountUp value={profitYear} money />
@@ -247,35 +289,20 @@ export default async function Dashboard() {
 
         <div className="grid grid-2 stagger" style={{ marginBottom: 16 }}>
           <div className="card">
-            <div className="card-title">Team sales this month</div>
-            {team.every((t) => Number(t.rev) === 0) ? (
-              <div className="empty">No assigned sales yet this month. Assign orders to team members from the Orders page.</div>
-            ) : (
-              <Leaderboard rows={team.map((t) => ({ label: t.name, value: Number(t.rev) }))} />
-            )}
-          </div>
-          <div className="card">
-            <div className="card-title">Delivery vs pickup, this month</div>
-            {fulfillmentData.every((f) => f.value === 0) ? (
-              <div className="empty">No orders yet this month.</div>
-            ) : (
-              <Donut data={fulfillmentData} />
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-2 stagger">
-          <div className="card">
-            <div className="card-title">Upcoming orders</div>
+            <div className="card-title">
+              Upcoming orders
+              <span className="spacer" />
+              <Link href="/orders?layout=calendar" className="link-green" style={{ fontSize: 12.5 }}>Calendar →</Link>
+            </div>
             {upcoming.length === 0 ? (
               <div className="empty">Nothing scheduled. Add orders from the Orders tab.</div>
             ) : (
               upcoming.map((o) => {
                 const d = String(o.delivery_date).slice(0, 10);
                 return (
-                  <div className="row" key={o.id}>
+                  <Link href={`/orders/${o.id}`} className="row row-link" key={o.id} style={{ display: "flex" }}>
                     <div className="row-main">
-                      <div className="row-title">{o.customer_name}</div>
+                      <div className="row-title">#{o.id} · {o.customer_name}</div>
                       <div className="row-sub">
                         {fmtDate(o.delivery_date)}
                         {o.delivery_time ? ` at ${o.delivery_time}` : ""}
@@ -289,10 +316,53 @@ export default async function Dashboard() {
                       {d === today && <span className="pill pill-amber">Today</span>}
                       <StatusPill status={o.status} />
                     </div>
-                  </div>
+                  </Link>
                 );
               })
             )}
+          </div>
+
+          <div className="card">
+            <div className="card-title">Recent activity</div>
+            {feed.length === 0 ? (
+              <div className="empty">Actions across the app will show up here — who did what, when.</div>
+            ) : (
+              <div className="timeline">
+                {feed.map((a) => {
+                  const href = ENTITY_HREF[a.entity]?.(a.entity_id);
+                  return (
+                    <div className="tl-item" key={a.id}>
+                      <div className="tl-text">
+                        <strong>{a.user_name || "System"}</strong>{" "}
+                        {href ? <Link href={href} className="row-link">{a.summary}</Link> : a.summary}
+                      </div>
+                      <div className="tl-time">{timeAgo(a.created_at)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-2 stagger">
+          <div className="stack" style={{ gap: 14 }}>
+            <div className="card">
+              <div className="card-title">Team sales this month</div>
+              {team.every((t) => Number(t.rev) === 0) ? (
+                <div className="empty">No assigned sales yet this month. Assign orders to team members from the Orders page.</div>
+              ) : (
+                <Leaderboard rows={team.map((t) => ({ label: t.name, value: Number(t.rev) }))} />
+              )}
+            </div>
+            <div className="card">
+              <div className="card-title">Delivery vs pickup, this month</div>
+              {fulfillmentData.every((f) => f.value === 0) ? (
+                <div className="empty">No orders yet this month.</div>
+              ) : (
+                <Donut data={fulfillmentData} />
+              )}
+            </div>
           </div>
 
           <div className="stack" style={{ gap: 14 }}>
@@ -301,7 +371,18 @@ export default async function Dashboard() {
               {topCustomers.length === 0 ? (
                 <div className="empty">No delivered orders yet.</div>
               ) : (
-                <Leaderboard rows={topCustomers.map((t) => ({ label: t.customer_name, value: Number(t.rev) }))} />
+                topCustomers.map((t, i) => (
+                  <div className="row" key={i}>
+                    <div className="row-main">
+                      <div className="row-title">
+                        {t.customer_id
+                          ? <Link href={`/customers/${t.customer_id}`} className="link-green">{t.customer_name}</Link>
+                          : t.customer_name}
+                      </div>
+                    </div>
+                    <div className="row-side"><strong>{money(t.rev)}</strong></div>
+                  </div>
+                ))
               )}
             </div>
             <div className="card">

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { logActivity } from "@/lib/activity";
 
 function clean(b) {
   return {
@@ -36,6 +37,12 @@ export async function PATCH(request) {
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const b = await request.json();
   if (!b.id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
+  if (b.restore) {
+    const sql = await db();
+    await sql`UPDATE expenses SET deleted_at = NULL WHERE id = ${b.id}`;
+    await logActivity(sql, user, "restored", "expense", parseInt(b.id, 10), `restored expense #${b.id}`);
+    return NextResponse.json({ ok: true });
+  }
   const e = clean(b);
   if (!e.description) return NextResponse.json({ error: "A description is required." }, { status: 400 });
   if (!e.amount || e.amount <= 0) return NextResponse.json({ error: "A positive amount is required." }, { status: 400 });
@@ -59,6 +66,8 @@ export async function DELETE(request) {
   const b = await request.json();
   if (!b.id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
   const sql = await db();
-  await sql`DELETE FROM expenses WHERE id = ${b.id}`;
-  return NextResponse.json({ ok: true });
+  const [e] = await sql`UPDATE expenses SET deleted_at = now() WHERE id = ${b.id} RETURNING description`;
+  await logActivity(sql, user, "deleted", "expense", parseInt(b.id, 10),
+    `moved expense ${e?.description ? `“${e.description}”` : `#${b.id}`} to trash`);
+  return NextResponse.json({ ok: true, undoable: true });
 }

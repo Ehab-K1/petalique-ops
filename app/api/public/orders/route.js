@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { logActivity } from "@/lib/activity";
+import { findOrCreateCustomer } from "@/lib/sync";
 
 // Public endpoint — no login required. This powers the shareable customer order form.
 export async function POST(request) {
@@ -55,12 +57,18 @@ export async function POST(request) {
       b.marketing_optin ? "Opted in to marketing emails" : "",
     ].filter(Boolean).join(" · ").slice(0, 500);
 
+    // Match or create a customer record so webform orders show up in the CRM.
+    const customerId = await findOrCreateCustomer(sql, {
+      name: b.customer_name, phone: b.phone, email: b.email,
+    });
+
     const rows = await sql`
-      INSERT INTO orders (customer_name, phone, email, order_type, items_desc,
+      INSERT INTO orders (customer_id, customer_name, phone, email, order_type, items_desc,
                           delivery_date, delivery_time, address, payment_status, total, notes,
                           fulfillment_type, occasion, source, status,
                           product_types, quantity, addons, preferred_contact, marketing_optin)
-      VALUES (${String(b.customer_name).trim().slice(0, 120)},
+      VALUES (${customerId},
+              ${String(b.customer_name).trim().slice(0, 120)},
               ${String(b.phone || "").trim().slice(0, 40)},
               ${String(b.email || "").trim().slice(0, 120)},
               ${"retail"},
@@ -77,6 +85,8 @@ export async function POST(request) {
               ${addonsStr}, ${String(b.preferred_contact).trim().slice(0, 60)},
               ${b.marketing_optin === true})
       RETURNING id`;
+    await logActivity(sql, null, "created", "order", rows[0].id,
+      `web form inquiry #${rows[0].id} — ${String(b.customer_name).trim().slice(0, 120)}`);
     return NextResponse.json({ ok: true, id: rows[0].id });
   } catch (err) {
     console.error("public order error", err);

@@ -2,24 +2,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { fmtDate, money } from "./ui";
-import { Modal, Segmented, CopyButton, toast } from "./client";
+import { Modal, Segmented, CopyButton, toast, toastUndo } from "./client";
 
 const KIND_LABEL = { invoice: "Invoice", quote: "Quotation" };
 const STATUS_STYLE = {
   draft: "pill-gray", sent: "pill-amber", accepted: "pill-wine",
-  paid: "pill-green", void: "pill-rust",
+  partial: "pill-amber", paid: "pill-green", void: "pill-rust",
 };
+const METHODS = [["cash", "Cash"], ["e_transfer", "E-transfer"], ["card", "Card"], ["paypal", "PayPal"], ["other", "Other"]];
 
-const BLANK = {
-  kind: "invoice",
-  customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_address: "",
-  order_id: "",
-  items: [{ section: "", name: "", detail: "", qty: 1, price: "" }],
-  tax_rate: 13, discount: 0,
-  issue_date: new Date().toISOString().slice(0, 10),
-  due_date: "", event_date: "", deposit_pct: "", notes: "",
-};
+function blankForm(defaultTax) {
+  return {
+    kind: "invoice",
+    customer_id: "", customer_name: "", customer_email: "", customer_phone: "", customer_address: "",
+    order_id: "",
+    items: [{ section: "", name: "", detail: "", qty: 1, price: "" }],
+    tax_rate: defaultTax, discount: 0,
+    issue_date: new Date().toISOString().slice(0, 10),
+    due_date: "", event_date: "", deposit_pct: "", notes: "",
+  };
+}
 
 // backward-compat: older invoices were saved with {desc, qty, price} only
 function normalizeItem(it) {
@@ -40,15 +44,45 @@ function totalsOf(items, taxRate, discount) {
   return { subtotal, tax, total: taxable + tax };
 }
 
-export default function InvoicesClient({ invoices, customers, orders }) {
+export default function InvoicesClient({ invoices, customers, orders, defaultTax = 13 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [confirmId, setConfirmId] = useState(null);
-  const [form, setForm] = useState(BLANK);
+  const [paying, setPaying] = useState(null); // invoice being paid
+  const [form, setForm] = useState(blankForm(defaultTax));
+  const [payForm, setPayForm] = useState({ amount: "", method: "e_transfer", paid_date: new Date().toISOString().slice(0, 10), reference: "" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [kindFilter, setKindFilter] = useState("all");
+
+  const [origin, setOrigin] = useState("");
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+
+  // Deep links: ?new=1, ?new=quote, ?customer=ID, ?open=ID (edit straight away)
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const n = p.get("new");
+    if (n) {
+      const f = blankForm(defaultTax);
+      if (n === "quote") f.kind = "quote";
+      const cid = p.get("customer");
+      if (cid) {
+        const c = customers.find((x) => String(x.id) === String(cid));
+        if (c) {
+          f.customer_id = c.id; f.customer_name = c.name;
+          f.customer_email = c.email || ""; f.customer_phone = c.phone || "";
+        }
+      }
+      setForm(f);
+      setShowForm(true);
+    }
+    const openId = p.get("open");
+    if (openId) {
+      const inv = invoices.find((x) => String(x.id) === String(openId));
+      if (inv) startEdit(inv);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function api(method, body, msg) {
     const res = await fetch("/api/invoices", {
@@ -61,6 +95,16 @@ export default function InvoicesClient({ invoices, customers, orders }) {
       if (msg) toast(msg);
     }
     return res;
+  }
+
+  function removeInvoice(inv) {
+    api("DELETE", { id: inv.id }).then((res) => {
+      if (res.ok) {
+        toastUndo(`${inv.number} moved to trash`, async () => {
+          await api("PATCH", { id: inv.id, restore: true }, "Restored");
+        });
+      }
+    });
   }
 
   function setItem(i, patch) {
@@ -86,6 +130,7 @@ export default function InvoicesClient({ invoices, customers, orders }) {
       setForm({
         ...form,
         order_id: o.id,
+        customer_id: form.customer_id || o.customer_id || "",
         customer_name: form.customer_name || o.customer_name,
         items: form.items.some((it) => it.name)
           ? form.items
@@ -110,7 +155,7 @@ export default function InvoicesClient({ invoices, customers, orders }) {
     if (res.ok) {
       setShowForm(false);
       setEditing(null);
-      setForm(BLANK);
+      setForm(blankForm(defaultTax));
     } else {
       const d = await res.json().catch(() => ({}));
       setError(d.error || "Could not save.");
@@ -129,7 +174,7 @@ export default function InvoicesClient({ invoices, customers, orders }) {
       items: Array.isArray(inv.items) && inv.items.length
         ? inv.items.map(normalizeItem)
         : [{ section: "", name: "", detail: "", qty: 1, price: "" }],
-      tax_rate: inv.tax_rate ?? 13,
+      tax_rate: inv.tax_rate ?? defaultTax,
       discount: inv.discount ?? 0,
       issue_date: String(inv.issue_date).slice(0, 10),
       due_date: inv.due_date ? String(inv.due_date).slice(0, 10) : "",
@@ -141,14 +186,49 @@ export default function InvoicesClient({ invoices, customers, orders }) {
     setError("");
   }
 
+  function startPay(inv, balance) {
+    setPaying(inv);
+    setPayForm({
+      amount: balance > 0 ? balance.toFixed(2) : "",
+      method: "e_transfer",
+      paid_date: new Date().toISOString().slice(0, 10),
+      reference: "",
+    });
+  }
+
+  async function submitPay(e) {
+    e.preventDefault();
+    setSaving(true);
+    const res = await fetch("/api/payments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payForm,
+        invoice_id: paying.id,
+        order_id: paying.order_id || "",
+        customer_name: paying.customer_name,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      toast("Payment recorded — invoice status updated");
+      setPaying(null);
+      router.refresh();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      toast(d.error || "Could not record payment", "err");
+    }
+  }
+
   const filtered = useMemo(() => {
     if (kindFilter === "all") return invoices;
+    if (kindFilter === "unpaid") {
+      return invoices.filter((i) => i.kind === "invoice" && !["paid", "void"].includes(i.status));
+    }
     return invoices.filter((i) => i.kind === kindFilter);
   }, [invoices, kindFilter]);
 
   const t = totalsOf(form.items, form.tax_rate, form.discount);
-  const [origin, setOrigin] = useState("");
-  useEffect(() => { setOrigin(window.location.origin); }, []);
 
   const formBody = (
     <form className="stack" onSubmit={submit}>
@@ -225,7 +305,7 @@ export default function InvoicesClient({ invoices, customers, orders }) {
                   ✕
                 </button>
               </div>
-              <textarea rows={2} placeholder="Description shown under the item name, optional — e.g. A beautiful arrangement of 12 mixed red and white roses…"
+              <textarea rows={2} placeholder="Description shown under the item name, optional"
                 value={it.detail} onChange={(e) => setItem(i, { detail: e.target.value })}
                 style={{ marginTop: 8, fontSize: 13 }} />
             </div>
@@ -295,20 +375,53 @@ export default function InvoicesClient({ invoices, customers, orders }) {
     <>
       <div className="toolbar">
         <Segmented
-          options={[["all", "All"], ["invoice", "Invoices"], ["quote", "Quotes"]]}
+          options={[["all", "All"], ["invoice", "Invoices"], ["quote", "Quotes"], ["unpaid", "Awaiting payment"]]}
           value={kindFilter} onChange={setKindFilter}
         />
       </div>
 
-      <button className="btn btn-block" onClick={() => { setShowForm(!showForm); setEditing(null); setForm(BLANK); }} style={{ marginBottom: 14 }}>
+      <button className="btn btn-block" onClick={() => { setShowForm(!showForm); setEditing(null); setForm(blankForm(defaultTax)); }} style={{ marginBottom: 14 }}>
         {showForm ? "Close" : "+ New invoice or quote"}
       </button>
 
       {showForm && !editing && <div className="card" style={{ marginBottom: 14 }}>{formBody}</div>}
 
       {editing && (
-        <Modal title={`Edit ${editing.number}`} onClose={() => { setEditing(null); setForm(BLANK); }}>
+        <Modal title={`Edit ${editing.number}`} onClose={() => { setEditing(null); setForm(blankForm(defaultTax)); }}>
           {formBody}
+        </Modal>
+      )}
+
+      {paying && (
+        <Modal title={`Record payment — ${paying.number}`} onClose={() => setPaying(null)}>
+          <form className="stack" onSubmit={submitPay}>
+            <div className="form-grid-2">
+              <label className="field">
+                <span>Amount</span>
+                <input type="number" step="0.01" min="0.01" required autoFocus value={payForm.amount}
+                  onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })} />
+              </label>
+              <label className="field">
+                <span>Method</span>
+                <select value={payForm.method} onChange={(e) => setPayForm({ ...payForm, method: e.target.value })}>
+                  {METHODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="form-grid-2">
+              <label className="field">
+                <span>Date received</span>
+                <input type="date" value={payForm.paid_date}
+                  onChange={(e) => setPayForm({ ...payForm, paid_date: e.target.value })} required />
+              </label>
+              <label className="field">
+                <span>Reference, optional</span>
+                <input value={payForm.reference}
+                  onChange={(e) => setPayForm({ ...payForm, reference: e.target.value })} />
+              </label>
+            </div>
+            <button className="btn" type="submit" disabled={saving}>{saving ? "Saving…" : "Record payment"}</button>
+          </form>
         </Modal>
       )}
 
@@ -319,6 +432,8 @@ export default function InvoicesClient({ invoices, customers, orders }) {
       <div className="stack stagger">
         {filtered.map((inv) => {
           const t2 = totalsOf(Array.isArray(inv.items) ? inv.items : [], inv.tax_rate, inv.discount);
+          const paid = Number(inv.paid) || 0;
+          const balance = Math.max(0, t2.total - paid);
           const link = `${origin}/i/${inv.token}`;
           return (
             <div className="card" key={inv.id}>
@@ -326,13 +441,25 @@ export default function InvoicesClient({ invoices, customers, orders }) {
                 <div className="row-main">
                   <div className="row-title">
                     {inv.number}
-                    <span className="muted"> · {inv.customer_name}</span>
+                    <span className="muted">
+                      {" · "}
+                      {inv.customer_id
+                        ? <Link href={`/customers/${inv.customer_id}`} className="link-green">{inv.customer_name}</Link>
+                        : inv.customer_name}
+                    </span>
                   </div>
                   <div className="row-sub">
                     {KIND_LABEL[inv.kind]} · issued {fmtDate(inv.issue_date)}
                     {inv.due_date ? ` · ${inv.kind === "quote" ? "valid until" : "due"} ${fmtDate(inv.due_date)}` : ""}
                     {" · "}{money(t2.total)}
                   </div>
+                  {inv.kind === "invoice" && paid > 0 && (
+                    <div className="row-sub">
+                      <span className={"balance-chip " + (balance > 0 ? "due" : "clear")}>
+                        {money(paid)} paid{balance > 0 ? ` · ${money(balance)} outstanding` : " · settled ✓"}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <div className="row-side">
                   <span className={"pill " + (STATUS_STYLE[inv.status] || "pill-gray")}>{inv.status}</span>
@@ -343,12 +470,17 @@ export default function InvoicesClient({ invoices, customers, orders }) {
                   View / PDF
                 </a>
                 <CopyButton text={link} label="Copy share link" small />
+                {inv.kind === "invoice" && balance > 0 && (
+                  <button className="btn btn-sm btn-gold" onClick={() => startPay(inv, balance)}>
+                    💵 Record payment
+                  </button>
+                )}
                 <select
                   className="inline-select"
                   value={inv.status}
                   onChange={(e) => api("PATCH", { id: inv.id, status: e.target.value }, "Status updated")}
                 >
-                  {["draft", "sent", ...(inv.kind === "quote" ? ["accepted"] : []), "paid", "void"].map((s) => (
+                  {["draft", "sent", ...(inv.kind === "quote" ? ["accepted"] : ["partial"]), "paid", "void"].map((s) => (
                     <option key={s} value={s}>{s}</option>
                   ))}
                 </select>
@@ -365,7 +497,7 @@ export default function InvoicesClient({ invoices, customers, orders }) {
                   </button>
                 )}
                 {inv.order_id ? (
-                  <span className="pill pill-green">Order #{inv.order_id}</span>
+                  <Link href={`/orders/${inv.order_id}`} className="pill pill-green">Order #{inv.order_id} →</Link>
                 ) : (
                   <button className="btn btn-ghost btn-sm"
                     onClick={async () => {
@@ -381,18 +513,7 @@ export default function InvoicesClient({ invoices, customers, orders }) {
                   </button>
                 )}
                 <button className="btn btn-ghost btn-sm" onClick={() => startEdit(inv)}>Edit</button>
-                {confirmId === inv.id ? (
-                  <>
-                    <span className="error-text">Delete?</span>
-                    <button className="btn btn-sm" style={{ background: "#a8462b" }}
-                      onClick={() => { api("DELETE", { id: inv.id }, "Deleted"); setConfirmId(null); }}>
-                      Yes
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>No</button>
-                  </>
-                ) : (
-                  <button className="btn-danger btn" onClick={() => setConfirmId(inv.id)}>Delete</button>
-                )}
+                <button className="btn-danger btn" onClick={() => removeInvoice(inv)}>Delete</button>
               </div>
             </div>
           );

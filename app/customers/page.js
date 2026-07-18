@@ -21,10 +21,11 @@ export default async function CustomersPage() {
         SUM(CASE WHEN status IN ('delivered','picked_up') THEN total ELSE 0 END) AS lifetime,
         MAX(delivery_date) AS last_order
       FROM orders
-      WHERE customer_id IS NOT NULL
+      WHERE customer_id IS NOT NULL AND deleted_at IS NULL
       GROUP BY customer_id
     ) o ON o.customer_id = c.id
-    ORDER BY c.name ASC
+    WHERE c.deleted_at IS NULL
+    ORDER BY o.last_order DESC NULLS LAST, c.name ASC
     LIMIT 500`;
 
   const plain = (rows) => JSON.parse(JSON.stringify(rows));
@@ -35,7 +36,7 @@ export default async function CustomersPage() {
       <div className="page">
         <div className="page-title">Customers</div>
         <div className="page-sub">
-          Retail buyers, event planners, venues, and wholesale accounts, with order history in one place.
+          Every buyer with their full history — orders from the web form and staff entries link here automatically. Click a customer for their 360° view.
         </div>
         <CustomersClient customers={plain(customers)} />
       </div>

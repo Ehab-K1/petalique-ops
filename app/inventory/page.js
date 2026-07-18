@@ -16,7 +16,7 @@ export default async function InventoryPage() {
 
   const openOrders = await sql`
     SELECT id, customer_name, delivery_date FROM orders
-    WHERE status NOT IN ('delivered','picked_up','cancelled')
+    WHERE status NOT IN ('delivered','picked_up','cancelled') AND deleted_at IS NULL
     ORDER BY delivery_date ASC`;
 
   const plain = (rows) => JSON.parse(JSON.stringify(rows));

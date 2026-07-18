@@ -1,59 +1,66 @@
-# Petalique Flora — Studio Operations App v2
+# Petalique Ops — Studio OS (v3)
 
-A full web app for running the studio: team logins, orders (delivery **and pickup**), payments
-ledger, invoices & quotations with shareable links and PDF export, a public customer order form,
-inventory with freshness tracking, a customer/B2B database, and a weekly order planner.
+The operations system for Petalique Flora: a connected CRM, order pipeline, invoicing,
+payments ledger, inventory, reporting, and a public order form — in one Next.js app.
+Runs on free tiers: **Vercel** (hosting) + **Neon** (Postgres).
 
-Everything runs on free tiers: **Vercel** (hosting) + **Neon** (Postgres database).
+## What v3 adds (the "everything talks to everything" release)
 
----
+- **Connected records.** Every order, invoice and payment links to a customer record,
+  created or matched automatically (by phone → email → name) — including web form
+  submissions and a one-time backfill of all historical data.
+- **Detail pages.** `/orders/[id]` (status pipeline, payments with balance, linked
+  invoices, activity timeline) and `/customers/[id]` (lifetime value, full history,
+  merge-duplicates).
+- **Sync engine.** Record a payment → the invoice flips to partial/paid → the linked
+  order's payment status updates → dashboard and reports agree. Deleting/restoring a
+  payment re-syncs everything it touched.
+- **No more destructive mistakes.** All deletes are soft: every delete shows an Undo
+  toast, and admins can restore anything from Settings → Trash. Order status can move
+  backwards by clicking any step on the pipeline.
+- **App shell.** Sidebar navigation, ⌘K global search across all records, a
+  notification bell (new inquiries, due today, overdue orders & invoices, aging stock),
+  and a "+ New" quick-add menu.
+- **Orders three ways.** List, drag-and-drop board, and a delivery calendar.
+- **Reports.** Revenue/expenses/profit by period, revenue by product, top customers,
+  where orders come from, payment methods, expense categories, and invoice aging
+  (who owes what, how late) — all exportable to CSV.
+- **Settings.** Business profile (name, contact, tax rate, invoice footer) and an
+  editable product/add-on catalog that powers the public order form — no redeploys
+  to change the menu. Activity log records who did what across the app.
 
-## What's inside
+## Stack
 
-| Page | What it does |
-|---|---|
-| Dashboard | This month vs last month (with % change), yearly total, **profit and margin**, revenue-vs-expenses 12-month chart, team sales leaderboard, delivery/pickup split, top customers, alerts, new web-form inquiries |
-| Orders | Every delivery **and pickup**: customer, items, date/time, address, price, status pipeline, payment status, sold-by assignment, occasion. Search + filters. Full edit on everything. |
-| Payments | Ledger of every payment (cash, e-transfer, card…), linked to orders. Auto-updates the order's paid/deposit status. Monthly totals and method breakdown. |
-| Expenses | Track every cost — flowers, materials, services, legal, payroll, delivery, marketing, rent. Category breakdown, recurring flags, and live profit + margin. |
-| Invoices | Create invoices and quotations with line items, tax and discount. Share as a public link or export as PDF (print). Convert quotes to invoices. Track draft → sent → paid. |
-| Customers | Retail, planners, venues, corporate, wholesale. Order count, lifetime value, last order, notes. Full edit. |
-| Inventory | Log every stem intake. Freshness meter per batch. Assign batches to orders. Mark used or waste. Full edit. |
-| Planner | Suggested buy quantities for next week from your last 4 weeks of real usage, plus waste tracking. |
-| Team | Admin-only. Logins for each partner, role management, password resets, per-person monthly sales. |
+- Next.js 15 App Router (JavaScript, no CSS framework — single `globals.css` design system)
+- Neon Postgres via `@neondatabase/serverless`; schema migrates itself in `lib/db.js`
+  (`ensureSchema` — all changes are additive, existing data is preserved)
+- Cookie-session auth (admin/staff), bcryptjs
+- Zero other runtime dependencies; charts are hand-rolled SVG
 
-### The public order form — replaces Google Forms
+## Key files
 
-Share **`https://your-app-url/order`** with customers (there's a copy-link button at the top of
-the Orders page). Customers pick **delivery or pickup**, describe what they want, and the request
-lands directly in your Orders list marked **Web form · Pending** — no syncing, no Google account,
-no re-typing. New inquiries are highlighted on the dashboard.
+| Area | Files |
+| --- | --- |
+| Schema + migrations + backfill | `lib/db.js` |
+| Customer matching + status sync | `lib/sync.js` |
+| Audit log | `lib/activity.js` |
+| App shell (sidebar, search, bell) | `components/Nav.js`, `CommandPalette.js`, `NotificationBell.js` |
+| Orders | `components/OrdersClient.js`, `OrderForm.js`, `OrderDetail.js`, `app/orders/[id]/` |
+| Customers | `components/CustomersClient.js`, `CustomerDetail.js`, `app/customers/[id]/` |
+| Money | `components/PaymentsClient.js`, `InvoicesClient.js`, `app/reports/` |
+| Config | `app/settings/`, `components/SettingsClient.js`, `app/api/catalog/`, `app/api/settings/` |
+| Safety net | `app/api/trash/`, soft-delete columns everywhere |
 
-### Invoices & quotes — shareable + PDF
+## Environment
 
-Each invoice/quote gets a private share link (`/i/<token>`) you can text or email to the customer.
-The page is print-optimized: the **Download PDF / Print** button produces a clean, branded PDF.
-
----
-
-## Deploy (already set up)
-
-The app deploys from this GitHub repo via Vercel. Environment variables (already configured):
-
-| Name | Value |
-|---|---|
-| `DATABASE_URL` | Neon connection string |
-| `SESSION_SECRET` | long random string |
-| `ADMIN_EMAIL` | first admin login email |
-| `ADMIN_PASSWORD` | first admin password |
-
-New database tables and columns (payments, invoices, pickup/assignment fields) are created
-**automatically** on the first page load after deploying — no manual migration needed.
-
-## Local development (optional)
-
-```bash
-npm install
-cp .env.example .env.local   # fill in values
-npm run dev                  # http://localhost:3000
 ```
+DATABASE_URL=postgres://...        # Neon connection string
+SESSION_SECRET=<long random string>
+ADMIN_EMAIL=owner@petalique.com    # first-boot admin (only used on empty DB)
+ADMIN_PASSWORD=<something strong>
+```
+
+## Deploy
+
+Push to `main` — Vercel builds and deploys. The first request after deploy runs the
+additive schema migration and (once) the customer-linking backfill.

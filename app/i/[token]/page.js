@@ -1,18 +1,20 @@
 import { Fragment } from "react";
-import { db, invoiceTotals } from "@/lib/db";
+import { db, invoiceTotals, getBusiness } from "@/lib/db";
 import { fmtDateLong, money, BloomMark } from "@/components/ui";
 import { PrintButton } from "@/components/client";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }) {
-  return { title: "Petalique Flora — Document" };
+export async function generateMetadata() {
+  const business = await getBusiness();
+  return { title: `${business.name} — Document` };
 }
 
 export default async function PublicInvoicePage({ params }) {
   const { token } = await params;
   const sql = await db();
-  const rows = await sql`SELECT * FROM invoices WHERE token = ${token}`;
+  const business = await getBusiness(sql);
+  const rows = await sql`SELECT * FROM invoices WHERE token = ${token} AND deleted_at IS NULL`;
   const inv = rows[0];
 
   if (!inv) {
@@ -23,7 +25,7 @@ export default async function PublicInvoicePage({ params }) {
           <h2 style={{ fontFamily: "var(--font-display)", color: "var(--green)", margin: "12px 0 6px" }}>
             Document not found
           </h2>
-          <p className="muted">This link may have been removed. Please contact Petalique Flora.</p>
+          <p className="muted">This link may have been removed. Please contact {business.name}.</p>
         </div>
       </div>
     );
@@ -58,9 +60,10 @@ export default async function PublicInvoicePage({ params }) {
       <div className="doc">
         <div className="doc-brand-center">
           <div className="mark"><BloomMark size={40} /></div>
-          <div className="name">Petalique Flora</div>
-          <div className="tag">Premium Floral Designs &amp; Event Rentals</div>
-          <div className="contact">hello@petaliqueflora.com | 647-446-3149</div>
+          <div className="name">{business.name}</div>
+          {business.tagline && <div className="tag">{business.tagline}</div>}
+          <div className="contact">{[business.email, business.phone].filter(Boolean).join(" | ")}</div>
+          {business.address && <div className="contact">{business.address}</div>}
         </div>
 
         <hr className="doc-rule" />
@@ -70,6 +73,9 @@ export default async function PublicInvoicePage({ params }) {
           <div className="n">{inv.number}</div>
           {inv.status === "paid" && !isQuote && (
             <div style={{ marginTop: 6 }}><span className="pill pill-green">PAID</span></div>
+          )}
+          {inv.status === "partial" && !isQuote && (
+            <div style={{ marginTop: 6 }}><span className="pill pill-amber">PARTIALLY PAID</span></div>
           )}
         </div>
 
@@ -152,7 +158,7 @@ export default async function PublicInvoicePage({ params }) {
         )}
 
         <div className="doc-foot">
-          Thank you for choosing Petalique Flora 🌸
+          {business.invoice_footer}
           {isQuote ? " · This quotation is not a receipt of payment." : ""}
         </div>
       </div>

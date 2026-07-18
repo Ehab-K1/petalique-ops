@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { fmtDate, money } from "./ui";
-import { Modal, toast } from "./client";
+import { Modal, toast, toastUndo } from "./client";
 
 const TYPES = [
   ["retail", "Retail"],
@@ -21,10 +22,24 @@ export default function CustomersClient({ customers }) {
   const [editing, setEditing] = useState(null);
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
-  const [confirmId, setConfirmId] = useState(null);
   const [form, setForm] = useState(BLANK);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("new")) setShowForm(true);
+  }, []);
+
+  function removeCustomer(c) {
+    api("DELETE", { id: c.id }).then((res) => {
+      if (res.ok) {
+        toastUndo(`${c.name} moved to trash`, async () => {
+          await api("PATCH", { id: c.id, restore: true }, "Customer restored");
+        });
+      }
+    });
+  }
 
   async function api(method, body, msg) {
     const res = await fetch("/api/customers", {
@@ -159,11 +174,15 @@ export default function CustomersClient({ customers }) {
 
       <div className="stack stagger">
         {list.map((c) => (
-          <div className="card" key={c.id}>
+          <div className="card row-link" key={c.id}
+            onClick={(e) => {
+              if (e.target.closest("select,button,a,input,label")) return;
+              router.push(`/customers/${c.id}`);
+            }}>
             <div className="row" style={{ borderBottom: "none", padding: 0 }}>
               <div className="row-main">
                 <div className="row-title">
-                  {c.name}
+                  <Link href={`/customers/${c.id}`} className="link-green">{c.name}</Link>
                   {c.company ? <span className="muted"> · {c.company}</span> : null}
                 </div>
                 <div className="row-sub">
@@ -184,19 +203,9 @@ export default function CustomersClient({ customers }) {
                 >
                   {TYPES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
+                <Link href={`/customers/${c.id}`} className="btn btn-ghost btn-sm">Open →</Link>
                 <button className="btn btn-ghost btn-sm" onClick={() => startEdit(c)}>Edit</button>
-                {confirmId === c.id ? (
-                  <>
-                    <span className="error-text">Delete?</span>
-                    <button className="btn btn-sm" style={{ background: "#a8462b" }}
-                      onClick={() => { api("DELETE", { id: c.id }, "Customer deleted"); setConfirmId(null); }}>
-                      Yes
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>No</button>
-                  </>
-                ) : (
-                  <button className="btn-danger btn" onClick={() => setConfirmId(c.id)}>Delete</button>
-                )}
+                <button className="btn-danger btn" onClick={() => removeCustomer(c)}>Delete</button>
               </div>
             </div>
           </div>

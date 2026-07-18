@@ -9,18 +9,28 @@ export function toast(message, type = "ok") {
   }
 }
 
+/* Toast with an Undo button — used after every delete so mistakes cost one click. */
+export function toastUndo(message, onUndo) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("pf-toast", {
+      detail: { message, type: "ok", actionLabel: "Undo", onAction: onUndo, ttl: 6000 },
+    }));
+  }
+}
+
 export function Toaster() {
   const [items, setItems] = useState([]);
   useEffect(() => {
     function onToast(e) {
       const id = Math.random().toString(36).slice(2);
+      const ttl = e.detail.ttl || 2400;
       setItems((prev) => [...prev.slice(-2), { id, ...e.detail, out: false }]);
       setTimeout(() => {
         setItems((prev) => prev.map((t) => (t.id === id ? { ...t, out: true } : t)));
-      }, 2400);
+      }, ttl);
       setTimeout(() => {
         setItems((prev) => prev.filter((t) => t.id !== id));
-      }, 2750);
+      }, ttl + 350);
     }
     window.addEventListener("pf-toast", onToast);
     return () => window.removeEventListener("pf-toast", onToast);
@@ -31,10 +41,39 @@ export function Toaster() {
       {items.map((t) => (
         <div key={t.id} className={"toast" + (t.type === "err" ? " toast-err" : "") + (t.out ? " out" : "")}>
           {t.type === "err" ? "⚠" : "✓"} {t.message}
+          {t.actionLabel && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                t.onAction?.();
+                setItems((prev) => prev.filter((x) => x.id !== t.id));
+              }}
+            >
+              {t.actionLabel}
+            </button>
+          )}
         </div>
       ))}
     </div>
   );
+}
+
+/* ---------- CSV export (reports, lists) ---------- */
+export function downloadCSV(filename, rows) {
+  if (!rows || rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const esc = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => esc(r[h])).join(","))].join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename.endsWith(".csv") ? filename : `${filename}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 /* ---------- animated number ---------- */

@@ -19,7 +19,7 @@ export default async function TeamPage() {
     LEFT JOIN (
       SELECT assigned_user_id, SUM(total) AS rev, COUNT(*) AS c
       FROM orders
-      WHERE status <> 'cancelled' AND delivery_date >= date_trunc('month', CURRENT_DATE)
+      WHERE status <> 'cancelled' AND deleted_at IS NULL AND delivery_date >= date_trunc('month', CURRENT_DATE)
       GROUP BY assigned_user_id
     ) s ON s.assigned_user_id = u.id
     ORDER BY u.created_at ASC`;

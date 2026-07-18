@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { fmtDate, money } from "./ui";
-import { Modal, toast, CountUp, Tilt } from "./client";
+import { Modal, toast, toastUndo, CountUp, Tilt } from "./client";
 
 const METHODS = [
   ["cash", "Cash"],
@@ -16,19 +17,23 @@ const METHODS = [
 const methodLabel = (m) => (METHODS.find(([v]) => v === m) || [])[1] || m;
 
 const BLANK = {
-  order_id: "", customer_name: "", amount: "", method: "cash",
+  order_id: "", invoice_id: "", customer_name: "", amount: "", method: "cash",
   paid_date: new Date().toISOString().slice(0, 10), reference: "", notes: "",
 };
 
-export default function PaymentsClient({ payments, openOrders, monthTotal, byMethod, outstanding }) {
+export default function PaymentsClient({ payments, orders, invoices, monthTotal, byMethod, outstanding }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [confirmId, setConfirmId] = useState(null);
   const [form, setForm] = useState(BLANK);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState("");
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("new")) setShowForm(true);
+  }, []);
 
   async function api(method, body, msg) {
     const res = await fetch("/api/payments", {
@@ -43,17 +48,42 @@ export default function PaymentsClient({ payments, openOrders, monthTotal, byMet
     return res;
   }
 
+  function removePayment(p) {
+    api("DELETE", { id: p.id }).then((res) => {
+      if (res.ok) {
+        toastUndo(`Payment of ${money(p.amount)} moved to trash`, async () => {
+          await api("PATCH", { id: p.id, restore: true }, "Payment restored");
+        });
+      }
+    });
+  }
+
   function pickOrder(id) {
-    const o = openOrders.find((x) => String(x.id) === String(id));
+    const o = orders.find((x) => String(x.id) === String(id));
     if (o) {
       setForm({
         ...form,
         order_id: o.id,
-        customer_name: o.customer_name,
+        customer_name: form.customer_name || o.customer_name,
         amount: form.amount || (Number(o.total) > 0 ? o.total : ""),
       });
     } else {
       setForm({ ...form, order_id: "" });
+    }
+  }
+
+  function pickInvoice(id) {
+    const inv = invoices.find((x) => String(x.id) === String(id));
+    if (inv) {
+      setForm({
+        ...form,
+        invoice_id: inv.id,
+        order_id: inv.order_id || form.order_id,
+        customer_name: form.customer_name || inv.customer_name,
+        amount: form.amount || (inv.balance > 0 ? inv.balance.toFixed(2) : ""),
+      });
+    } else {
+      setForm({ ...form, invoice_id: "" });
     }
   }
 
@@ -65,7 +95,7 @@ export default function PaymentsClient({ payments, openOrders, monthTotal, byMet
     const res = await api(
       isEdit ? "PATCH" : "POST",
       isEdit ? { ...form, id: editing.id } : form,
-      isEdit ? "Payment updated" : "Payment recorded"
+      isEdit ? "Payment updated" : "Payment recorded — statuses synced"
     );
     setSaving(false);
     if (res.ok) {
@@ -81,6 +111,7 @@ export default function PaymentsClient({ payments, openOrders, monthTotal, byMet
   function startEdit(p) {
     setForm({
       order_id: p.order_id || "",
+      invoice_id: p.invoice_id || "",
       customer_name: p.customer_name || p.order_customer || "",
       amount: p.amount,
       method: p.method,
@@ -96,26 +127,47 @@ export default function PaymentsClient({ payments, openOrders, monthTotal, byMet
     if (!q.trim()) return payments;
     const s = q.trim().toLowerCase();
     return payments.filter((p) =>
-      [p.customer_name, p.order_customer, p.reference, p.notes, methodLabel(p.method)]
+      [p.customer_name, p.order_customer, p.linked_customer, p.invoice_number, p.reference, p.notes, methodLabel(p.method)]
         .filter(Boolean).some((v) => String(v).toLowerCase().includes(s))
     );
   }, [payments, q]);
 
+  const selInvoice = invoices.find((x) => String(x.id) === String(form.invoice_id));
+
   const formBody = (
     <form className="stack" onSubmit={submit}>
-      <label className="field">
-        <span>Link to an order, optional but recommended</span>
-        <select value={form.order_id} onChange={(e) => pickOrder(e.target.value)}>
-          <option value="">No linked order</option>
-          {openOrders.map((o) => (
-            <option key={o.id} value={o.id}>
-              #{o.id} · {o.customer_name} · {fmtDate(o.delivery_date)}
-              {Number(o.total) > 0 ? ` · ${money(o.total)}` : ""}
-              {o.payment_status !== "paid" ? ` (${o.payment_status})` : ""}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="form-grid-2">
+        <label className="field">
+          <span>Link to an invoice / quote</span>
+          <select value={form.invoice_id} onChange={(e) => pickInvoice(e.target.value)}>
+            <option value="">No linked invoice</option>
+            {invoices.map((inv) => (
+              <option key={inv.id} value={inv.id}>
+                {inv.number} · {inv.customer_name}
+                {inv.balance > 0 ? ` · ${money(inv.balance)} due` : " · paid"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span>Link to an order</span>
+          <select value={form.order_id} onChange={(e) => pickOrder(e.target.value)}>
+            <option value="">No linked order</option>
+            {orders.map((o) => (
+              <option key={o.id} value={o.id}>
+                #{o.id} · {o.customer_name} · {fmtDate(o.delivery_date)}
+                {Number(o.total) > 0 ? ` · ${money(o.total)}` : ""}
+                {o.payment_status !== "paid" ? ` (${o.payment_status})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {selInvoice && selInvoice.balance > 0 && (
+        <div className="muted" style={{ marginTop: -4 }}>
+          {selInvoice.number}: {money(selInvoice.paid)} paid of {money(selInvoice.total)} — balance {money(selInvoice.balance)}.
+        </div>
+      )}
       <div className="form-grid-2">
         <label className="field">
           <span>Amount</span>
@@ -168,10 +220,13 @@ export default function PaymentsClient({ payments, openOrders, monthTotal, byMet
           <div className="stat-value"><CountUp value={monthTotal.s} money /></div>
           <div className="stat-label">Collected this month ({monthTotal.c} payments)</div>
         </Tilt>
-        <Tilt className="card stat">
-          <div className="stat-value"><CountUp value={outstanding.s} money /></div>
-          <div className="stat-label">Still outstanding ({outstanding.c} orders)</div>
-        </Tilt>
+        <Link href="/orders?filter=unpaid" className="stat-link">
+          <Tilt className="card stat">
+            <div className="stat-value"><CountUp value={outstanding.s} money /></div>
+            <div className="stat-label">Still outstanding ({outstanding.c} orders)</div>
+            <div className="stat-hint">See who owes →</div>
+          </Tilt>
+        </Link>
         <div className="card stat">
           <div className="stat-label" style={{ marginBottom: 6 }}>Last 30 days by method</div>
           {byMethod.length === 0 ? (
@@ -219,30 +274,26 @@ export default function PaymentsClient({ payments, openOrders, monthTotal, byMet
               <div className="row-main">
                 <div className="row-title">
                   {money(p.amount)}
-                  <span className="muted"> · {p.customer_name || p.order_customer || "Unlinked"}</span>
+                  <span className="muted">
+                    {" · "}
+                    {p.customer_id
+                      ? <Link href={`/customers/${p.customer_id}`} className="link-green">{p.linked_customer || p.customer_name || p.order_customer}</Link>
+                      : (p.customer_name || p.order_customer || "Unlinked")}
+                  </span>
                 </div>
                 <div className="row-sub">
                   {fmtDate(p.paid_date)} · {methodLabel(p.method)}
-                  {p.order_id ? ` · order #${p.order_id}` : ""}
+                  {p.order_id ? <> · <Link href={`/orders/${p.order_id}`} className="link-green">order #{p.order_id}</Link></> : null}
+                  {p.invoice_number ? ` · ${p.invoice_number}` : ""}
                   {p.reference ? ` · ref ${p.reference}` : ""}
                 </div>
                 {p.notes && <div className="row-sub">Note: {p.notes}</div>}
               </div>
               <div className="row-side">
                 <span className="pill pill-green">{methodLabel(p.method)}</span>
+                {p.order_id && <Link href={`/orders/${p.order_id}`} className="btn btn-ghost btn-sm">Order →</Link>}
                 <button className="btn btn-ghost btn-sm" onClick={() => startEdit(p)}>Edit</button>
-                {confirmId === p.id ? (
-                  <>
-                    <span className="error-text">Delete?</span>
-                    <button className="btn btn-sm" style={{ background: "#a8462b" }}
-                      onClick={() => { api("DELETE", { id: p.id }, "Payment deleted"); setConfirmId(null); }}>
-                      Yes
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>No</button>
-                  </>
-                ) : (
-                  <button className="btn-danger btn" onClick={() => setConfirmId(p.id)}>Delete</button>
-                )}
+                <button className="btn-danger btn" onClick={() => removePayment(p)}>Delete</button>
               </div>
             </div>
           </div>

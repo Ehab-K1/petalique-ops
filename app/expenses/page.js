@@ -11,30 +11,31 @@ export default async function ExpensesPage() {
 
   const expenses = await sql`
     SELECT * FROM expenses
+    WHERE deleted_at IS NULL
     ORDER BY expense_date DESC, id DESC
     LIMIT 500`;
 
   const thisMonth = await sql`
     SELECT COALESCE(SUM(amount),0)::numeric AS s, COUNT(*)::int AS c FROM expenses
-    WHERE expense_date >= date_trunc('month', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE)`;
 
   const lastMonth = await sql`
     SELECT COALESCE(SUM(amount),0)::numeric AS s FROM expenses
-    WHERE expense_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'
       AND expense_date < date_trunc('month', CURRENT_DATE)`;
 
   const thisYear = await sql`
     SELECT COALESCE(SUM(amount),0)::numeric AS s FROM expenses
-    WHERE expense_date >= date_trunc('year', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('year', CURRENT_DATE)`;
 
   const byCategory = await sql`
     SELECT category, COALESCE(SUM(amount),0)::numeric AS s FROM expenses
-    WHERE expense_date >= date_trunc('month', CURRENT_DATE)
+    WHERE deleted_at IS NULL AND expense_date >= date_trunc('month', CURRENT_DATE)
     GROUP BY category ORDER BY s DESC`;
 
   const revenueThisMonth = await sql`
     SELECT COALESCE(SUM(total),0)::numeric AS s FROM orders
-    WHERE status IN ('delivered','picked_up') AND delivery_date >= date_trunc('month', CURRENT_DATE)`;
+    WHERE deleted_at IS NULL AND status IN ('delivered','picked_up') AND delivery_date >= date_trunc('month', CURRENT_DATE)`;
 
   const plain = (rows) => JSON.parse(JSON.stringify(rows));
 

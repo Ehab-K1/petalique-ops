@@ -2,12 +2,11 @@ import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { db, invoiceTotals } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { logActivity } from "@/lib/activity";
+import { findOrCreateCustomer, syncOrderPayment } from "@/lib/sync";
 
-// This route reads raw Postgres rows directly, so DATE columns arrive as JS Date
-// objects (not the ISO strings a client component would get after Next.js
-// serializes props). String(dateObject).slice(0,10) silently produces garbage —
-// that was the cause of "convert to order" failing whenever the invoice had a
-// due date set. Same root cause as the Invalid Date PDF bug, different file.
+// DATE columns read from raw Postgres rows arrive as JS Date objects, and
+// String(dateObject).slice(0,10) silently produces garbage. Normalize first.
 function toISODate(d) {
   if (!d) return "";
   if (d instanceof Date) {
@@ -21,10 +20,7 @@ function toISODate(d) {
 }
 
 // items keep a flexible shape: {section, name, detail, qty, price}.
-// `section` groups rows under a day/event header (e.g. "Friday, August 7, 2026").
-// `detail` is the description line shown under the item name on the document.
-// Older invoices saved as {desc, qty, price} still render fine — `name` falls
-// back to `desc` wherever items are read.
+// Older invoices saved as {desc, qty, price} still render fine.
 function cleanItems(items) {
   if (!Array.isArray(items)) return [];
   return items
@@ -38,10 +34,44 @@ function cleanItems(items) {
     .filter((it) => it.name);
 }
 
+async function nextNumber(sql, kind) {
+  const year = new Date().getFullYear();
+  const [{ c }] = await sql`SELECT COUNT(*)::int AS c FROM invoices WHERE kind = ${kind}`;
+  return `${kind === "quote" ? "QUO" : "INV"}-${year}-${String(c + 1).padStart(3, "0")}`;
+}
+
 export async function POST(request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   const b = await request.json();
+  const sql = await db();
+
+  try {
+
+  // One-click "create invoice from order" — pre-filled and linked both ways.
+  if (b.fromOrder) {
+    const [o] = await sql`SELECT * FROM orders WHERE id = ${parseInt(b.fromOrder, 10)} AND deleted_at IS NULL`;
+    if (!o) return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    const kind = b.kind === "quote" ? "quote" : "invoice";
+    const number = await nextNumber(sql, kind);
+    const token = crypto.randomBytes(16).toString("hex");
+    const itemName = (o.product_types || o.items_desc || "Floral arrangement").slice(0, 160);
+    const items = [{ section: "", name: itemName, detail: o.items_desc !== itemName ? String(o.items_desc || "").slice(0, 400) : "", qty: 1, price: Number(o.total) || 0 }];
+    const rows = await sql`
+      INSERT INTO invoices (number, kind, status, customer_id, customer_name, customer_email,
+                            customer_phone, customer_address, order_id, items, tax_rate, discount,
+                            issue_date, due_date, event_date, deposit_pct, notes, token)
+      VALUES (${number}, ${kind}, ${"draft"}, ${o.customer_id}, ${o.customer_name},
+              ${o.email || ""}, ${o.phone || ""}, ${o.address || ""}, ${o.id},
+              ${JSON.stringify(items)}, ${0}, ${0},
+              ${new Date().toISOString().slice(0, 10)}, ${toISODate(o.delivery_date) || null},
+              ${""}, ${0}, ${""}, ${token})
+      RETURNING id, number, token`;
+    await logActivity(sql, user, "created", "invoice", rows[0].id,
+      `created ${number} from order #${o.id} (${o.customer_name})`, { order_id: o.id });
+    return NextResponse.json({ ok: true, ...rows[0] });
+  }
+
   if (!b.customer_name) {
     return NextResponse.json({ error: "Customer name is required." }, { status: 400 });
   }
@@ -49,19 +79,23 @@ export async function POST(request) {
   if (items.length === 0) {
     return NextResponse.json({ error: "At least one line item is required." }, { status: 400 });
   }
-  const sql = await db();
   const kind = b.kind === "quote" ? "quote" : "invoice";
-  const year = new Date().getFullYear();
-  const [{ c }] = await sql`SELECT COUNT(*)::int AS c FROM invoices WHERE kind = ${kind}`;
-  const number = `${kind === "quote" ? "QUO" : "INV"}-${year}-${String(c + 1).padStart(3, "0")}`;
+  const number = await nextNumber(sql, kind);
   const token = crypto.randomBytes(16).toString("hex");
+
+  let customerId = b.customer_id ? parseInt(b.customer_id, 10) : null;
+  if (!customerId) {
+    customerId = await findOrCreateCustomer(sql, {
+      name: b.customer_name, phone: b.customer_phone, email: b.customer_email,
+    });
+  }
 
   const rows = await sql`
     INSERT INTO invoices (number, kind, status, customer_id, customer_name, customer_email,
                           customer_phone, customer_address, order_id, items, tax_rate, discount,
                           issue_date, due_date, event_date, deposit_pct, notes, token)
     VALUES (${number}, ${kind}, ${"draft"},
-            ${b.customer_id ? parseInt(b.customer_id, 10) : null},
+            ${customerId},
             ${String(b.customer_name).trim()},
             ${String(b.customer_email || "").trim()},
             ${String(b.customer_phone || "").trim()},
@@ -77,7 +111,14 @@ export async function POST(request) {
             ${String(b.notes || "").trim()},
             ${token})
     RETURNING id, number, token`;
+  await logActivity(sql, user, "created", "invoice", rows[0].id,
+    `created ${number} for ${String(b.customer_name).trim()}`);
   return NextResponse.json({ ok: true, ...rows[0] });
+
+  } catch (err) {
+    console.error("invoice POST error", err);
+    return NextResponse.json({ error: err.message || "Something went wrong." }, { status: 500 });
+  }
 }
 
 export async function PATCH(request) {
@@ -89,8 +130,24 @@ export async function PATCH(request) {
 
   try {
 
+  if (b.restore) {
+    const [inv] = await sql`UPDATE invoices SET deleted_at = NULL WHERE id = ${b.id} RETURNING number, order_id`;
+    if (inv?.order_id) await syncOrderPayment(sql, inv.order_id);
+    await logActivity(sql, user, "restored", "invoice", parseInt(b.id, 10), `restored ${inv?.number || `invoice #${b.id}`}`);
+    return NextResponse.json({ ok: true });
+  }
+
   if (b.status !== undefined) {
+    const [inv] = await sql`SELECT number, status, order_id, kind FROM invoices WHERE id = ${b.id}`;
     await sql`UPDATE invoices SET status = ${b.status} WHERE id = ${b.id}`;
+    // Marking an invoice paid by hand also settles its linked order.
+    if (b.status === "paid" && inv?.order_id) {
+      await sql`UPDATE orders SET payment_status = 'paid' WHERE id = ${inv.order_id}`;
+    }
+    if (inv && inv.status !== b.status) {
+      await logActivity(sql, user, "status", "invoice", parseInt(b.id, 10),
+        `marked ${inv.number} as ${b.status}`);
+    }
   }
 
   if (b.edit) {
@@ -98,7 +155,14 @@ export async function PATCH(request) {
     if (!b.customer_name || items.length === 0) {
       return NextResponse.json({ error: "Customer name and at least one item are required." }, { status: 400 });
     }
+    let customerId = b.customer_id ? parseInt(b.customer_id, 10) : null;
+    if (!customerId) {
+      customerId = await findOrCreateCustomer(sql, {
+        name: b.customer_name, phone: b.customer_phone, email: b.customer_email,
+      });
+    }
     await sql`UPDATE invoices SET
+      customer_id = ${customerId},
       customer_name = ${String(b.customer_name).trim()},
       customer_email = ${String(b.customer_email || "").trim()},
       customer_phone = ${String(b.customer_phone || "").trim()},
@@ -113,15 +177,15 @@ export async function PATCH(request) {
       deposit_pct = ${Number(b.deposit_pct) || 0},
       notes = ${String(b.notes || "").trim()}
       WHERE id = ${b.id}`;
+    await logActivity(sql, user, "updated", "invoice", parseInt(b.id, 10),
+      `updated invoice #${b.id} — ${String(b.customer_name).trim()}`);
   }
 
   // convert quote → invoice
   if (b.convert) {
     const [inv] = await sql`SELECT * FROM invoices WHERE id = ${b.id} AND kind = 'quote'`;
     if (!inv) return NextResponse.json({ error: "Quote not found." }, { status: 404 });
-    const year = new Date().getFullYear();
-    const [{ c }] = await sql`SELECT COUNT(*)::int AS c FROM invoices WHERE kind = 'invoice'`;
-    const number = `INV-${year}-${String(c + 1).padStart(3, "0")}`;
+    const number = await nextNumber(sql, "invoice");
     const token = crypto.randomBytes(16).toString("hex");
     const rows = await sql`
       INSERT INTO invoices (number, kind, status, customer_id, customer_name, customer_email,
@@ -134,10 +198,12 @@ export async function PATCH(request) {
               ${inv.notes}, ${token})
       RETURNING id, number`;
     await sql`UPDATE invoices SET status = 'accepted' WHERE id = ${b.id}`;
+    await logActivity(sql, user, "converted", "invoice", rows[0].id,
+      `converted ${inv.number} into ${number}`);
     return NextResponse.json({ ok: true, ...rows[0] });
   }
 
-  // convert an accepted invoice/quote → a firm order on the Orders page
+  // convert an invoice/quote → a firm order on the Orders page
   if (b.convertToOrder) {
     const [inv] = await sql`SELECT * FROM invoices WHERE id = ${b.id}`;
     if (!inv) return NextResponse.json({ error: "Document not found." }, { status: 404 });
@@ -171,6 +237,9 @@ export async function PATCH(request) {
       RETURNING id`;
 
     await sql`UPDATE invoices SET order_id = ${rows[0].id} WHERE id = ${b.id}`;
+    await syncOrderPayment(sql, rows[0].id);
+    await logActivity(sql, user, "converted", "order", rows[0].id,
+      `created order #${rows[0].id} from ${inv.number}`, { invoice_id: inv.id });
     return NextResponse.json({ ok: true, orderId: rows[0].id });
   }
 
@@ -188,6 +257,9 @@ export async function DELETE(request) {
   const b = await request.json();
   if (!b.id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
   const sql = await db();
-  await sql`DELETE FROM invoices WHERE id = ${b.id}`;
-  return NextResponse.json({ ok: true });
+  const [inv] = await sql`UPDATE invoices SET deleted_at = now() WHERE id = ${b.id} RETURNING number, order_id`;
+  if (inv?.order_id) await syncOrderPayment(sql, inv.order_id);
+  await logActivity(sql, user, "deleted", "invoice", parseInt(b.id, 10),
+    `moved ${inv?.number || `invoice #${b.id}`} to trash`);
+  return NextResponse.json({ ok: true, undoable: true });
 }

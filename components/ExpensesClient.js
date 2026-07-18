@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fmtDate, money, Leaderboard } from "./ui";
-import { Modal, toast, CountUp, Tilt } from "./client";
+import { Modal, toast, toastUndo, CountUp, Tilt } from "./client";
 
 export const CATEGORIES = [
   ["flowers", "🌷 Flowers & stems"],
@@ -31,8 +31,23 @@ export default function ExpensesClient({ expenses, thisMonth, lastMonth, thisYea
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [confirmId, setConfirmId] = useState(null);
   const [form, setForm] = useState(BLANK);
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    if (p.get("new")) setShowForm(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function removeExpense(x) {
+    api("DELETE", { id: x.id }).then((res) => {
+      if (res.ok) {
+        toastUndo(`Expense moved to trash`, async () => {
+          await api("PATCH", { id: x.id, restore: true }, "Expense restored");
+        });
+      }
+    });
+  }
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [q, setQ] = useState("");
@@ -241,18 +256,7 @@ export default function ExpensesClient({ expenses, thisMonth, lastMonth, thisYea
                 <span className="pill pill-wine">{catLabel(x.category)}</span>
                 {x.recurring && <span className="pill pill-gold">↻ Recurring</span>}
                 <button className="btn btn-ghost btn-sm" onClick={() => startEdit(x)}>Edit</button>
-                {confirmId === x.id ? (
-                  <>
-                    <span className="error-text">Delete?</span>
-                    <button className="btn btn-sm" style={{ background: "#a8462b" }}
-                      onClick={() => { api("DELETE", { id: x.id }, "Expense deleted"); setConfirmId(null); }}>
-                      Yes
-                    </button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setConfirmId(null)}>No</button>
-                  </>
-                ) : (
-                  <button className="btn-danger btn" onClick={() => setConfirmId(x.id)}>Delete</button>
-                )}
+                <button className="btn-danger btn" onClick={() => removeExpense(x)}>Delete</button>
               </div>
             </div>
           </div>
